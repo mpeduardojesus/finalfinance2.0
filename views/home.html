@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Microplasticos | Home</title>
+  <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/admin-lte/2.4.18/css/AdminLTE.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/admin-lte/2.4.18/css/skins/skin-black.min.css">
+  <link rel="stylesheet" href="/assets/css/app.css">
+</head>
+<body class="hold-transition skin-black sidebar-mini">
+<div class="wrapper">
+
+  <!-- Navbar -->
+  <header class="main-header">
+    <a href="/" class="logo">
+      <span class="logo-lg mp-logo">
+        <svg viewBox="0 0 40 44" width="30" height="33" aria-hidden="true">
+          <polygon points="20,2 37,11 37,33 20,42 3,33 3,11" fill="#fff" stroke="#27456f" stroke-width="3"/>
+          <text x="20" y="27" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="14" fill="#27456f">MP</text>
+        </svg>
+        <b>MICROPLASTICOS</b>
+      </span>
+      <span class="logo-mini mp-logo-mini">
+        <svg viewBox="0 0 40 44" width="28" height="31" aria-hidden="true">
+          <polygon points="20,2 37,11 37,33 20,42 3,33 3,11" fill="#fff" stroke="#27456f" stroke-width="3"/>
+          <text x="20" y="27" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="14" fill="#27456f">MP</text>
+        </svg>
+      </span>
+    </a>
+    <nav class="navbar navbar-static-top" role="navigation">
+      <a href="#" class="sidebar-toggle" data-toggle="push-menu" role="button"><span class="sr-only">Alternar navegação</span></a>
+      <ul class="nav navbar-nav mp-nav-left">
+        <li><a href="/" title="Home"><i class="fa fa-home"></i></a></li>
+      </ul>
+      <div class="navbar-custom-menu">
+        <ul class="nav navbar-nav">
+          <li><a href="#" title="Notificações"><i class="fa fa-bell-o"></i></a></li>
+          <li><a href="#" title="Bandeiras"><i class="fa fa-flag-o"></i></a></li>
+          <li class="user user-menu">
+            <a href="#">
+              <span class="avatar avatar-sm"><i class="fa fa-user"></i></span>
+              <span class="hidden-xs">Eduardo Jesus</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Sidebar -->
+  <aside class="main-sidebar">
+    <section class="sidebar">
+      <div class="user-panel">
+        <div class="pull-left image"><span class="avatar avatar-lg"><i class="fa fa-user"></i></span></div>
+        <div class="pull-left info">
+          <select class="form-control input-sm" aria-label="Utilizador"><option>Eduardo Jesus</option><option>Terminar sessão</option></select>
+        </div>
+      </div>
+      <form action="#" method="get" class="sidebar-form" onsubmit="return false;">
+        <div class="input-group">
+          <input type="text" name="q" class="form-control" placeholder="Search">
+          <span class="input-group-btn">
+            <button type="submit" class="btn btn-flat" aria-label="Pesquisar"><i class="fa fa-search"></i></button>
+          </span>
+        </div>
+      </form>
+      <ul class="sidebar-menu" id="sidebar-menu" data-widget="tree">
+        <li class="treeview"><a href="#"><i class="fa fa-spinner fa-spin"></i> <span>A carregar…</span></a></li>
+      </ul>
+    </section>
+  </aside>
+
+  <!-- Conteúdo -->
+  <div class="content-wrapper">
+    <section class="content-header">
+      <h1>Home</h1>
+      <ol class="breadcrumb">
+        <li><a href="/"><i class="fa fa-home"></i> Home</a></li>
+      </ol>
+    </section>
+
+    <section class="content">
+      <div class="row">
+        <div class="col-md-6">
+
+          <div class="box box-solid mp-box" id="box-comunicacoes">
+            <div class="box-header">
+              <h3 class="box-title mp-blue">Comunicações Internas</h3>
+              <div class="box-tools pull-right">
+                <button type="button" class="btn btn-box-tool" data-widget="collapse" aria-label="Minimizar"><i class="fa fa-minus"></i></button>
+              </div>
+            </div>
+            <div class="box-body" id="comunicacoes"><p class="text-muted">A carregar…</p></div>
+          </div>
+
+          <div class="box box-solid mp-box" id="box-sabias">
+            <div class="box-header">
+              <h3 class="box-title mp-blue">SABIAS QUE</h3>
+              <div class="box-tools pull-right">
+                <button type="button" class="btn btn-box-tool" data-widget="collapse" aria-label="Minimizar"><i class="fa fa-minus"></i></button>
+              </div>
+            </div>
+            <div class="box-body" id="sabias"><p class="text-muted">A carregar…</p></div>
+          </div>
+
+          <div class="box box-solid mp-box" id="box-presenca">
+            <div class="box-header">
+              <h3 class="box-title">Requer Presença (Próximos 7 dias)</h3>
+              <div class="box-tools pull-right">
+                <button type="button" class="btn btn-box-tool" data-widget="collapse" aria-label="Minimizar"><i class="fa fa-minus"></i></button>
+              </div>
+            </div>
+            <div class="box-body" id="presenca"></div>
+          </div>
+
+        </div>
+
+        <div class="col-md-6">
+          <div class="box box-solid mp-box mp-missao">
+            <a href="#" class="mp-edit" title="Editar"><i class="fa fa-pencil"></i></a>
+            <div class="box-header text-center"><h3 class="box-title">Missão Social</h3></div>
+            <div class="box-body">
+              <!-- Banner feito em CSS/SVG (placeholder, sem imagens reais) -->
+              <div class="mp-banner">
+                <div class="mp-banner-top">
+                  <div class="mp-banner-brand">
+                    <svg viewBox="0 0 40 44" width="34" height="37" aria-hidden="true">
+                      <polygon points="20,2 37,11 37,33 20,42 3,33 3,11" fill="#2b2f8f" stroke="#7b6cf0" stroke-width="3"/>
+                      <text x="20" y="26" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="13" fill="#fff">MP</text>
+                    </svg>
+                    <span>MISSÃO SOCIAL</span>
+                  </div>
+                  <i class="fa fa-heart mp-banner-heart"></i>
+                </div>
+                <h2 class="mp-banner-title">
+                  DOA <span class="hl">FRUTAS</span> E <span class="hl">LEGUMES</span> E<br>FAZ ALGUÉM SORRIR
+                </h2>
+                <p class="mp-banner-sub">
+                  A <b class="hl">Missão Social MP</b> juntou-se à <b class="hl">Instituição CASA</b> para promover<br>
+                  refeições saudáveis a quem precisa.
+                </p>
+                <span class="mp-banner-arrow left"><i class="fa fa-chevron-left"></i></span>
+                <span class="mp-banner-arrow right"><i class="fa fa-chevron-right"></i></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="main-footer">
+    <div class="pull-right hidden-xs" id="backend-info"></div>
+    <strong>Microplasticos Intranet</strong>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/admin-lte/2.4.18/js/adminlte.min.js"></script>
+<script src="/assets/js/app.js"></script>
+</body>
+</html>

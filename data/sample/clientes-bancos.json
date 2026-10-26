@@ -1,0 +1,13 @@
+{
+    "version": 1,
+    "importedAt": "2026-10-26T00:00:00+00:00",
+    "rows": 4,
+    "ignored": 1,
+    "warnings": [],
+    "map": {
+        "9001": "Banco Exemplo A",
+        "9002": "Banco Exemplo B",
+        "9003": "Banco Exemplo B"
+    },
+    "sourceName": "clientes-bancos-sample.xlsx"
+}

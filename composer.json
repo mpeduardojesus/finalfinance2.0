@@ -1,0 +1,14 @@
+{
+  "name": "microplasticos/intranet",
+  "description": "Intranet Microplasticos (PHP 8.3, API REST, AdminLTE)",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "php": ">=8.3",
+    "ext-json": "*",
+    "ext-mbstring": "*",
+    "phpoffice/phpspreadsheet": "^5.0"
+  },
+  "config": { "optimize-autoloader": true, "sort-packages": true },
+  "minimum-stability": "stable"
+}

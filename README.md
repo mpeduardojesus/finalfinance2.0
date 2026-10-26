@@ -1,80 +1,253 @@
-# Final Finance 2.0
+# Microplasticos Intranet
 
-Plano de tesouraria semanal/diário por banco: parte dos **saldos bancários** e das **datas de vencimento** de recebimentos e pagamentos, permite **alterações manuais** e produz um **plano de pagamentos por banco** com alertas de falta de fundos.
+Página inicial da intranet (estilo AdminLTE 2) com **PHP 8.3**, **API REST em JSON** e **Oracle Database 19c** (extensão `oci8`), tudo em Docker.
 
-> Estado do repositório: protótipo funcional (uma página interativa) + núcleo de cálculo testado. Os dados incluídos são **fictícios**; os dados reais da empresa não fazem parte do repositório.
+- Frontend: AdminLTE 2.4 + Bootstrap 3 + Font Awesome 4 (via CDN). Logótipo, avatar e banner da "Missão Social" são placeholders em CSS/SVG.
+- Backend: PHP puro (`strict_types`, sem framework), router próprio em `src/Router.php`.
+- Dados: **Oracle 19c** quando as variáveis `ORACLE_*` estão definidas; caso contrário usa ficheiros JSON em `data/` (modo demo).
 
-## Objetivo
-
-Responder, para um horizonte de 4 a 12 semanas, às perguntas:
-
-1. Com os saldos que tenho hoje em cada banco, e com os recebimentos e pagamentos previstos por data de vencimento, **em que banco e em que dia vai faltar dinheiro**?
-2. **Quanto** é preciso cobrir (necessidade máxima) e **o que posso adiar** (data planeada manual) para não ficar a descoberto?
-3. Qual é o **plano de pagamentos por banco**, documento a documento, com o saldo após cada movimento?
-
-## Funcionalidades
-
-- Saldos iniciais por banco e linha de **CCC** (conta corrente) disponível, editáveis; opção «contar CCC como fundos disponíveis».
-- **Recebimentos** (clientes) e **pagamentos** (fornecedores, financiamentos, salários, outros) com documento, entidade, vencimento, valor, banco e origem.
-- **Data planeada** manual por documento: substitui o vencimento no cálculo (o vencimento original é mantido).
-- Adicionar, editar e apagar documentos; pesquisa e filtro por banco; atribuição em bloco de banco às linhas sem banco.
-- Projeção **semanal** (semanas ISO, segunda a domingo) ou **diária**, horizonte de 4, 6, 8, 10 ou 12 semanas.
-- Resumo por banco: saldo inicial, recebimentos, pagamentos, saldo final, saldo mínimo, 1.ª data de falta, necessidade máxima e estado (Coberto / Recorre à CCC / Falta de fundos).
-- Detalhe do plano por banco: lista cronológica de movimentos com o **saldo após cada um** e marcação das linhas em que falta dinheiro.
-- Grupo **«Sem banco atribuído»** para documentos sem banco (para não os perder no cálculo).
-- Gráficos de saldo final e de recebimentos vs. pagamentos.
-- **Importar/exportar** CSV (`;` ou tabulação, vírgula decimal, datas `DD/MM/AAAA`), com modos *Acrescentar* e *Substituir tudo*, para documentos e para saldos.
-
-## Como funciona (resumo)
-
-Para cada banco, os documentos são ordenados pela **data efetiva** (data planeada, se existir, senão vencimento; datas anteriores ao início contam como «em atraso» no dia de início). No mesmo dia os recebimentos entram antes dos pagamentos. O saldo corrente parte do saldo inicial e soma recebimentos / subtrai pagamentos; o **mínimo** atingido (com CCC, se ativa) determina a necessidade e a 1.ª falta. Detalhes em [`docs/arquitetura-e-calculo.md`](docs/arquitetura-e-calculo.md).
-
-## Modelo de dados
-
-| Entidade | Campos principais |
-|---|---|
-| Banco | `id`, `nome`, `saldo` (inicial, €), `ccc` (limite disponível, €) |
-| Documento (`Item`) | `tipo` (R/P), `doc`, `parte`, `venc` (AAAA-MM-DD), `valor` (> 0), `banco`, `dataPlan`, `origem` |
-| Parâmetros | data de início, horizonte (semanas), vista (semanal/diária), usar CCC |
-
-## Como usar
-
-Ver o [guia de utilização](docs/guia-de-utilizacao.md). Em resumo: (1) confirmar saldos e CCC; (2) importar ou editar recebimentos e pagamentos; (3) atribuir banco às linhas sem banco; (4) ler o plano por banco e ajustar datas planeadas; (5) exportar para guardar o trabalho — **a página não grava dados ao recarregar**.
-
-## Limitações principais
-
-Sem persistência; sem juros, câmbios, feriados nem dias úteis; recebimentos assumidos na data de vencimento; alguns defeitos de importação identificados na validação. Lista completa em [`docs/limitacoes-e-proximos-passos.md`](docs/limitacoes-e-proximos-passos.md) e [`docs/validacao.md`](docs/validacao.md).
-
-## Estrutura do repositório
+## Estrutura
 
 ```
-README.md                          este ficheiro
-package.json                       scripts de teste (esbuild + node --test)
-.gitignore
-docs/
-  requisitos.md                    requisitos funcionais e não funcionais
-  arquitetura-e-calculo.md         modelo de dados, algoritmo de projeção, pressupostos
-  guia-de-utilizacao.md            guia do utilizador e formatos CSV
-  plano-de-testes.md               casos de teste e resultados
-  validacao.md                     relatório de validação (verificado / não verificado / defeitos)
-  limitacoes-e-proximos-passos.md  limitações e roadmap
-src/
-  plano-tesouraria.canvas.tsx      a página interativa (dados de exemplo sintéticos)
-  tesouraria-core.ts               núcleo de cálculo extraído (cópia literal das funções do .tsx)
-tests/
-  core.test.ts                     54 testes do núcleo (dados sintéticos)
-  fidelity.mjs                     verifica que o núcleo é cópia fiel do .tsx
+Dockerfile              php:8.3-apache + Oracle Instant Client + oci8
+docker-compose.yml      serviço web em http://localhost:8080
+.env.example            variáveis de ligação ao Oracle
+router.php              router para `php -S` (sem Docker)
+public/                 DocumentRoot (index.php = front controller, .htaccess, assets/)
+src/                    Router, Api, Validator, Database (oci8), Repository/{DataStore,OracleStore,JsonStore}
+views/home.html         página inicial
+data/                   JSON do modo demo + menu.json
+data/sample/            dados FICTÍCIOS do Plano de tesouraria (demonstração)
+data/private/           dados CONFIDENCIAIS do Plano de tesouraria (ignorado pelo git e pelo Docker)
+db/schema.sql           DDL + dados de exemplo para Oracle 19c
+src/Treasury/           Plano de tesouraria: Auth, Storage, SageImporter, TreasuryService, TreasuryApi, Util
+views/treasury.html     página /treasury (JS em public/assets/js/treasury.js)
+composer.json           PhpSpreadsheet (importação do .xls do Sage)
+tests/ tools/           auto-teste da lógica e gerador dos dados fictícios
 ```
 
-## Executar os testes
+## Executar (modo demo, sem Oracle)
+
+Requisitos: Docker + Docker Compose.
 
 ```bash
-npm install
-npm test        # 54 testes + verificação de fidelidade
+docker compose up --build
 ```
 
-Requer Node.js ≥ 20. A página `.tsx` importa de `grok/canvas` (ambiente de «Pages» do Grok Bot) e **não corre isolada** fora desse ambiente; por isso o cálculo foi extraído para `src/tesouraria-core.ts`, que é o que os testes executam.
+Abrir <http://localhost:8080>. Sem `ORACLE_*` definidas, a aplicação usa `data/*.json` (`GET /api/health` mostra `"backend":"json"`).
 
-## Dados e confidencialidade
+> O primeiro build descarrega o **Oracle Instant Client (Basic + SDK)** diretamente da Oracle (`download.oracle.com`) e compila a extensão `oci8` via PECL — precisa de acesso à Internet e demora alguns minutos. O Instant Client **não** está incluído neste projeto; aceite os termos de licença da Oracle antes de o usar. A imagem usa a arquitetura `x64`; em Mac Apple Silicon/ARM64 use `--platform linux/amd64` ou ajuste os URLs no `Dockerfile` para `linux-arm64`.
 
-O `.tsx` incluído é uma **cópia saneada**: os dados iniciais reais (saldos, clientes, fornecedores, contratos) foram substituídos por dados fictícios. **Não coloque dados reais neste repositório**; importe-os em runtime através de «Importar e exportar».
+## Ligar ao Oracle 19c real
+
+1. Criar o esquema e os dados de exemplo (como o utilizador da aplicação):
+
+   ```bash
+   sqlplus APP_USER/PASSWORD@//HOST:1521/SERVICO @db/schema.sql
+   ```
+
+   O `db/schema.sql` cria as tabelas `COMMUNICATIONS` e `FACTS` com colunas `IDENTITY` (19c) e insere os registos de exemplo.
+
+2. Copiar `.env.example` para `.env` e preencher (o `.env` está no `.gitignore`; **não** colocar credenciais no código):
+
+   ```env
+   ORACLE_HOST=oracle19c.empresa.local
+   ORACLE_PORT=1521
+   ORACLE_SERVICE=ORCLPDB1        # service name (não SID)
+   ORACLE_USER=intranet
+   ORACLE_PASSWORD=********
+   ORACLE_CHARSET=AL32UTF8
+   ```
+
+3. Arrancar: `docker compose up --build`. Verificar: `curl http://localhost:8080/api/health` → `"backend":"oracle"`.
+
+Notas:
+- O contentor tem de conseguir chegar ao host Oracle (rede/firewall). Se o Oracle estiver no próprio anfitrião (Linux), descomente `extra_hosts` no `docker-compose.yml` e use `ORACLE_HOST=host.docker.internal`.
+- Todas as queries usam *bind variables* (`oci_bind_by_name`); o `INSERT` usa `RETURNING id INTO :new_id`.
+- Se as variáveis estiverem definidas mas a ligação falhar, a API responde `503` com erro JSON (não há fallback silencioso para JSON). Defina `APP_DEBUG=1` para ver o erro Oracle nas respostas `500`.
+
+## Endpoints
+
+| Método | Rota | Descrição | Códigos |
+|---|---|---|---|
+| GET | `/api/health` | Estado da app e da base de dados | 200 / 503 |
+| GET | `/api/communications` | Lista (mais recentes primeiro) | 200 |
+| GET | `/api/communications/{id}` | Detalhe | 200 / 400 / 404 |
+| POST | `/api/communications` | Criar | 201 (+`Location`) / 400 / 422 |
+| PUT | `/api/communications/{id}` | Substituir (todos os campos obrigatórios) | 200 / 400 / 404 / 422 |
+| DELETE | `/api/communications/{id}` | Apagar | 204 / 404 |
+| GET | `/api/facts` | "Sabias que" | 200 |
+| GET | `/api/menu` | Menu lateral | 200 |
+
+Objeto *comunicação*: `{"id":1,"date":"2026-10-23","department":"Recursos Humanos","title":"...","url":"#","highlighted":true}`
+(`date` em `AAAA-MM-DD`; `department` ≤ 100 e `title` ≤ 300 caracteres, obrigatórios; `url` opcional; `highlighted` booleano, por omissão `false`).
+
+Erros: `{"error":{"status":422,"message":"Dados inválidos.","details":{"date":"Data inválida."}}}`
+
+## Exemplos curl
+
+```bash
+curl -s localhost:8080/api/health
+curl -s localhost:8080/api/communications
+curl -s localhost:8080/api/communications/2
+
+curl -s -i -X POST localhost:8080/api/communications \
+  -H 'Content-Type: application/json' \
+  -d '{"date":"2026-10-26","department":"Qualidade","title":"Nova comunicação","url":"https://exemplo.pt","highlighted":true}'
+
+curl -s -X PUT localhost:8080/api/communications/4 \
+  -H 'Content-Type: application/json' \
+  -d '{"date":"2026-10-27","department":"Qualidade","title":"Título atualizado","highlighted":false}'
+
+curl -s -i -X DELETE localhost:8080/api/communications/4
+
+curl -s localhost:8080/api/facts
+curl -s localhost:8080/api/menu
+```
+
+## Desenvolvimento sem Docker (apenas modo demo)
+
+Com PHP 8.3 instalado localmente: `php -S localhost:8080 -t public router.php`. No modo demo, o PHP precisa de permissão de escrita em `data/`.
+
+
+---
+
+# Plano de tesouraria (Admin. Financeiro → Plano de tesouraria)
+
+Página `/treasury` + API `/api/treasury/*`. Mostra um **dashboard**, saldos por banco, recebimentos e pagamentos pelas **datas de vencimento** dos documentos em aberto do Sage X3, entradas manuais e **movimentos recorrentes**, e como resultado principal o **plano de pagamentos por banco** (com banco sugerido pela página) e um **plano de sugestões de otimização** com impacto em euros. Interface em português europeu.
+
+> **Os dados são confidenciais.** O ficheiro Sage, a relação cliente-banco e todos os dados gerados ficam apenas em `data/private/` (ignorado pelo git e pelo `.dockerignore`, montado como volume). Nunca estão na imagem Docker nem no zip de código.
+
+## Secções da página (por ordem)
+
+1. **Dashboard**: saldo total, CCC, liquidez, recebimentos/pagamentos do horizonte, saldo final e mínimo (e a semana), bancos em falta (e tabela com 1.ª falta e necessidade), pagamentos com banco sugerido, sem banco atribuído, vencidos a receber/pagar, prazos médios, aging dos vencidos, dez maiores clientes e fornecedores e quatro gráficos SVG (saldo projetado, recebimentos e pagamentos, saldos por banco, antiguidade dos vencidos).
+2. **Saldos bancários e parâmetros**: bancos, saldos, CCC; início, horizonte, vista, CCC como fundos, regras de vencidos, **banco de pagamento por defeito** (fornecedores) e **banco de recebimento por defeito** (clientes sem banco), compensação de créditos, pendentes, fora do Sage e **incluir movimentos recorrentes**.
+3. **Plano de pagamentos por banco**: modo do banco dos pagamentos a fornecedores (**Sugerido** por defeito, **Fixo**, **Manual**), critério (maior folga, ordem de prioridade com Subir/Descer, minimizar uso de CCC, minimizar transferências), "Dos quais sugeridos", pagamentos sugeridos a itálico com a folga, e **Aceitar sugestão** por fornecedor ou por documento.
+4. **Plano de sugestões de otimização**: transferências entre bancos, uso de CCC, mudança de banco de pagamento, escalonar vencidos, cobrança prioritária, clientes de cobrança duvidosa, créditos por compensar, concentração diária, etc., sempre com impacto em € e fundamentação. **São apenas sugestões: nada muda sozinho.**
+5. **Banco por entidade** (só os clientes têm banco: vem do ficheiro de clientes; os fornecedores podem ter um banco atribuído à mão), **Entidades nos dois lados**, **Movimentos recorrentes**, **Projeção**, **Recebimentos**, **Pagamentos**, **Importar/exportar**, **Ficheiros de origem** e **Regras e origem dos dados**.
+
+## Decisão de arquitetura
+
+- **Cálculo no servidor (PHP)**: `src/Treasury/Engine.php` (funções puras) é a porta fiel da lógica do ecrã original (entidades nos dois lados, compensação de créditos, vencidos, banco do documento, algoritmo de banco sugerido, recorrentes, dashboard, sugestões, semanas ISO). `TreasuryService.php` trata de persistência, validação, listas paginadas e importação/exportação. O JS (`public/assets/js/treasury.js`) só faz `fetch` e desenha tabelas/gráficos SVG (sem `innerHTML` com dados).
+- **Leitura do Sage e do ficheiro de clientes no servidor** com PhpSpreadsheet (`.xls` e `.xlsx`), incluída no build Docker (`composer install`). Há formulários de upload na página.
+- **Persistência em JSON** na pasta privada (mesmo que o Oracle esteja configurado: estes dados não vão para a base de dados da intranet).
+
+## Segurança e confidencialidade
+
+| Medida | Detalhe |
+|---|---|
+| HTTP Basic | `/treasury` e `/api/treasury/*`. Credenciais só de `TREASURY_USER` / `TREASURY_PASSWORD`; **se alguma não estiver definida, o acesso é recusado (503)**. Sem credenciais no código. |
+| HTTPS | O Basic viaja em claro em HTTP: sirva a app atrás de HTTPS (proxy inverso) fora do localhost. |
+| CSRF | Pedidos POST/PUT/DELETE exigem `X-Requested-With: XMLHttpRequest` e `Origin` igual ao host. |
+| Cache | `Cache-Control: no-store`, `Pragma: no-cache`, `X-Robots-Tag: noindex`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`. |
+| CSP | `connect-src 'self'`: os dados só vão para a própria origem. De CDNs (cdnjs) só se carregam ficheiros estáticos (Bootstrap/AdminLTE/jQuery/Font Awesome), nunca dados. Se preferir, copie esses ficheiros para `public/assets/vendor`. |
+| Logs | Não se registam linhas nem valores; em erros regista-se só a classe e a linha. `zend.exception_ignore_args=On` (ver `docker/php.ini`). |
+| Imagem/zip | `data/private`, `*.xls`, `*.xlsx`, `*.xlsm`, `*.csv` e `*.bak` estão no `.dockerignore`/`.gitignore`; o zip de código não os inclui (nem o `clientes_bancos.xlsx` real). |
+
+## Variáveis de ambiente
+
+| Variável | Descrição |
+|---|---|
+| `TREASURY_USER`, `TREASURY_PASSWORD` | Obrigatórias para aceder (HTTP Basic). |
+| `TREASURY_DATA_DIR` | Pasta privada (por defeito `data/private`; no Docker `/var/www/html/data/private`). |
+
+Ficheiro `.env` (copiar de `.env.example`) lido pelo `docker-compose.yml`.
+
+## Onde colocar os ficheiros privados
+
+**Ficheiro Sage.** Copie o mapa de itens em aberto exportado do Sage X3 para **`data/private/sage-open-items.xls`** (ou `.xlsx`), ou use "Ficheiros de origem" na página (carrega, valida e substitui; o anterior fica em `.bak`). Se o ficheiro for substituído diretamente na pasta, é relido automaticamente no pedido seguinte. Colunas lidas pelo nome do cabeçalho: `Terc.`, `Nome`, `Tipo`, `Documento`, `Data venc.`, `Colect.`, `Valor a pagar` e, opcionais, `Status` e `Divisa`. A data de referência vem de `Data ref.`.
+
+**Relação cliente → banco.** Copie `clientes_bancos.xlsx` (folha *Export Worksheet*) para **`data/private/clientes-bancos.xlsx`**, ou carregue-o em "Ficheiros de origem → Clientes e bancos". Colunas: `BPCNUM_0` (código do cliente = `Terc.` do Sage), `BPCNAM_0` (nome), `PAYBAN_0` e `DES_0` (nome do banco). A linha com `BPCNUM_0` = 0 (a própria empresa) é ignorada; o código compara-se como texto sem zeros à esquerda. Correspondência de bancos: Novo Banco; *Millennium BCP* → BCP; *Banco Santander Totta* → Santander; *Caixa Geral de Depósitos* → CGD; *Bank Millennium Polska EUR* e *PLN* → bancos novos (criados com saldo e CCC a 0; os valores contam em euros, sem conversão da divisa PLN). Qualquer outro nome de banco do ficheiro cria um banco novo com saldo 0 (com aviso). Na primeira leitura, e sempre que o ficheiro é carregado ou se usa "Repor bancos dos clientes (ficheiro)", o banco de cada cliente é atribuído a partir do ficheiro; depois pode alterá-lo à mão em "Banco por entidade". Os clientes sem banco no ficheiro ficam em "Sem banco atribuído" (listados na página) e usam o banco de recebimento por defeito, se o escolher. **Só os clientes têm banco; os fornecedores não.**
+
+Sem ficheiro Sage privado a página corre em **modo demonstração** com `data/sample/` (dados fictícios: `sage-open-items-sample.xls`, `clientes-bancos-sample.xlsx`, `clientes-bancos.json` e um movimento recorrente de exemplo).
+
+Ficheiros em `data/private/`: `sage-open-items.xls` (original), `sage-items.json` (cache), `clientes-bancos.xlsx` (original) e `clientes-bancos.json` (cache), `treasury.json` (bancos, saldos, CCC, parâmetros, prioridade dos bancos, bancos por entidade, classificação dos terceiros nos dois lados, movimentos recorrentes, entradas manuais e alterações a documentos Sage).
+
+## Executar
+
+```bash
+cp .env.example .env     # preencher TREASURY_USER e TREASURY_PASSWORD (e ORACLE_* se aplicável)
+mkdir -p data/private && chmod 770 data/private   # o contentor (www-data, uid 33) tem de poder escrever (ou: chown 33:33 data/private)
+cp /caminho/do/sage-open-items.xls data/private/
+cp /caminho/do/clientes_bancos.xlsx data/private/clientes-bancos.xlsx
+docker compose up --build
+```
+
+Abrir <http://localhost:8080/treasury> (a Basic auth pede utilizador e palavra-passe). Sem Docker: `composer install` e
+
+```bash
+TREASURY_USER=utilizador TREASURY_PASSWORD='palavra-passe-forte' \
+  php -d upload_max_filesize=20M -d post_max_size=25M -S localhost:8080 -t public router.php
+```
+
+Requisitos PHP: `gd`, `zip`, `xml`, `dom`, `simplexml`, `xmlreader`, `xmlwriter`, `mbstring`, `iconv`, `ctype`, `fileinfo`, `zlib` (o `Dockerfile` instala `gd` e `zip`; o resto já vem na imagem).
+
+Auto-teste (dados fictícios): `php tests/treasury_selftest.php`. Regenerar os dados fictícios: `php tools/make_sample.php`.
+
+## Regras de cálculo
+
+1. **Cliente/fornecedor** pela conta coletiva (`Colect.`): CGMN/CGUE/CGPT = clientes (a receber); FGMN/FGUE/FGPT = fornecedores (a pagar). Contas desconhecidas começadas por C/F são classificadas pela 1.ª letra e assinaladas como aviso.
+2. **Valor** = `Valor a pagar` (saldo em aberto). Em fornecedores o sinal é invertido (a pagar > 0).
+3. **Créditos/adiantamentos** (NCC, NCF, NCR, REC, PAG e outros de sinal contrário) são linhas negativas. Com **Compensar créditos** ligado, abatem aos documentos mais antigos da mesma entidade; o que sobrar fica como crédito.
+4. **Terceiro nos dois lados.** Classificação automática: **fornecedor** quando o valor absoluto dos documentos de fornecedor é igual ou superior ao dos de cliente. Tratado como fornecedor, a conta de cliente não aparece em recebimentos e entra nos pagamentos como crédito (paga-se a diferença); tratado como cliente, mantêm-se duas entradas sem compensação. Pode alterar a classificação por entidade em "Entidades nos dois lados" (e repor a automática).
+5. **Vencimento** = `Data venc.`; prazo = data de início − vencimento. Antes do início = vencido, tratado por regra própria e separada para recebimentos e pagamentos: no início / +N dias (7, 14, 30 ou qualquer valor 0–365 via API) / fora do plano. Uma **data planeada** manual prevalece.
+6. **Pendentes de aprovação** entram por defeito (parâmetro) e cada documento pode ser excluído individualmente; documentos em USD contam como euros, sem conversão.
+7. **Fora do Sage**: financiamentos, encargos, salários e prestações que não estão no Sage são **entradas manuais** (origem "Fora do Sage"), cada uma com banco e data próprios, removíveis (e desligáveis em bloco).
+8. **Saldos de abertura e CCC** são introduzidos em "Saldos bancários e parâmetros". CCC só conta como fundos se "Contar CCC" estiver ligado.
+9. **Banco de cada documento**: banco no documento > banco da entidade (cliente: ficheiro; fornecedor: o atribuído) > banco por defeito (recebimento ou pagamento) > "Sem banco atribuído". No mesmo dia os recebimentos entram antes dos pagamentos. **"Sem banco atribuído" não conta como banco** na falta de fundos: tem cartão próprio no dashboard.
+10. **Banco sugerido para pagamentos a fornecedores** (modo *Sugerido*, por defeito; *Fixo* usa o banco de pagamento por defeito; *Manual* só conta os bancos atribuídos). Algoritmo determinístico: 1) fixam-se os recebimentos de cada banco e os pagamentos que já têm banco (documento, fornecedor, defeito, fora do Sage); 2) os restantes ordenam-se por vencidos primeiro, data prevista, valor decrescente e identificador do documento; 3) para cada um calcula-se, em cada banco, a **folga** = menor saldo diário projetado desde a data do pagamento até ao fim do horizonte (com os recebimentos futuros do banco, os pagamentos já atribuídos e a CCC se estiver contada) menos o valor; créditos de fornecedores contam como entradas antes dos pagamentos do mesmo dia; 4) cabem os bancos com folga ≥ 0 e escolhe-se pelo critério (maior folga; ordem de prioridade; minimizar uso de CCC; minimizar transferências = ajuste justo); 5) se nenhum cabe, escolhe-se o banco com menos falta e o pagamento fica assinalado; 6) créditos de fornecedores vão para o banco ativo com menos folga. Um banco atribuído a documento ou fornecedor prevalece sempre. "Aceitar sugestão" converte-a em atribuição manual (por fornecedor: o banco com a maior parte dos pagamentos; por documento: um a um). Não altera nada sozinha.
+11. **Movimentos recorrentes** (manuais): descrição, categoria (Renda, Salários, Impostos/IVA/IRC/Seg. Social, Seguros, Outros), tipo, valor positivo, banco, frequência (semanal/mensal/trimestral/anual), dia, início/fim e regra de fim de semana (manter, adiantar ou adiar para dia útil). Geram ocorrências do início do plano ao fim do horizonte (nunca em atraso; num mês sem o dia usa-se o último dia). Cada ocorrência tem origem **Recorrente ↻**, entra na projeção, no plano por banco, no dashboard e nas sugestões, e **fica fora dos vencidos, aging, prazos médios, top 10 e das sugestões de mudança de banco**. Liga-se/desliga-se individualmente e globalmente.
+12. **Semana ISO (coluna derivada).** Calculada a partir de `Data venc.` (e da data planeada, se existir) no formato `AAAA-Www` da ISO 8601: semanas de segunda a domingo; a semana 1 é a que contém a 1.ª quinta-feira do ano (31/12/2026 e 01/01/2027 → `2026-W53`; 04/01/2027 → `2027-W01`; 29/12/2025 → `2026-W01`). **Não existe no ficheiro Sage nem é gravada**: é recalculada sempre. Aparece nas tabelas de recebimentos/pagamentos (semana de vencimento e semana planeada em colunas separadas), no detalhe do plano e nas exportações.
+13. **Agrupamento semanal = semana ISO** (projeção, plano por banco, dashboard e sugestões; vista semanal), com rótulo `S44 2026 (26/10–01/11)` (curto `S44`, ou `S01/27` quando o ano muda). O horizonte (4–26 semanas) começa na semana ISO da data de início; a 1.ª semana pode ser parcial. Vencidos caem na semana da data de início (ou início + dias, conforme a regra). A vista diária mantém uma coluna por dia.
+
+Os documentos do Sage nunca são alterados: gravar banco/data planeada/valor/vencimento ou "Excluir" num documento Sage cria uma *alteração* em `treasury.json`. "Repor" desfaz. "Repor dados do Sage" (em Importar e exportar) remove essas alterações, a classificação dos dois lados, os movimentos recorrentes e a prioridade, e repõe os bancos dos clientes a partir do ficheiro (mantém saldos/CCC e entradas manuais).
+
+## Importar e exportar (CSV `;`)
+
+Modos: **Documentos**, **Recorrentes**, **Saldos**, **Bancos por entidade** e **Plano por banco** (só exportação: `banco;banco_origem;documento;fornecedor;vencimento;semana_iso_venc;data_prevista;semana_iso_prevista;valor;saldo_apos;nota`). Recorrentes: `descricao;categoria;tipo;valor;banco;frequencia;dia;inicio;fim;fim_de_semana;ativo`. A exportação de Documentos não inclui recorrentes.
+
+## Endpoints `/api/treasury` (todos com HTTP Basic; escrita exige `X-Requested-With: XMLHttpRequest`)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/state` | Estado: modo demo, ficheiros de origem, parâmetros, bancos, resumo Sage, terceiros nos dois lados |
+| GET | `/plan` | Resultado por banco e período (recebimentos, pagamentos, sugeridos, saldo final, 1.ª falta, necessidade máx., estado) e prioridade |
+| GET | `/plan/detail?bank=&period=-1&rec=1&page=0` | Movimentos do banco (paginado, 50) com saldo após cada um e origem do banco |
+| GET | `/dashboard` | Indicadores, gráficos, bancos em falta, aging e top 10 |
+| GET | `/suggestions` | Plano de sugestões de otimização (texto, impacto em €, fundamentação) |
+| PUT | `/priority` | `{order:[ids dos bancos]}` (ordem de prioridade) |
+| POST | `/suggestions/accept` | `{mode:fornecedor\|documento}`: converte o banco sugerido em atribuição manual |
+| GET | `/open-items?tipo=R\|P&bank=&prazo=venc\|avenc\|cred\|excl&q=&page=` | Documentos (30 por página, com semana ISO de vencimento e planeada) |
+| GET/PUT | `/settings` | Início, horizonte, vista, CCC, compensação, pendentes, fora do Sage, `incRec`, regras de vencidos, `defBankR`, `defBankP`, `modoP` (Sugerido\|Fixo\|Manual), `crit` |
+| GET/POST | `/banks` | Lista / criar `{nome, saldo, ccc}` |
+| PUT/DELETE | `/banks/{id}` | Alterar / remover (limpa referências) |
+| GET/POST | `/manual-entries` | Entradas manuais `{tipo:R\|P, doc, parte, venc, valor, banco, dataPlan, origem?}` |
+| PUT/DELETE | `/manual-entries/{id}` | Alterar / apagar |
+| GET/POST | `/recurring` | Movimentos recorrentes `{desc, cat, tipo, valor, banco, freq, dia, ini, fim, fds, ativo}` |
+| PUT/DELETE | `/recurring/{id}` | Alterar (incl. `{ativo}`) / apagar |
+| PUT/DELETE | `/overrides/{id}` | Alterar (`banco`, `dataPlan`, `venc`, `valor`, `excluded`) / repor um documento Sage |
+| DELETE | `/overrides` | Repor todas as alterações a documentos Sage |
+| GET | `/entities?side=R\|P&q=&only=1&page=` | Entidades, banco atribuído e clientes sem banco |
+| PUT | `/entities/{codigo}` | `{banco}` (vazio remove) |
+| POST | `/entities/bulk` | `{side,q,only,mode:empty\|all\|clear,banco}` |
+| PUT | `/dual/{terc}` | `{classe:F\|C}` classificação do terceiro nos dois lados |
+| DELETE | `/dual` | Repor a classificação automática |
+| GET | `/export?kind=documents\|recurring\|balances\|entities\|plan` | CSV `;` em `{text}` |
+| POST | `/import` | `{kind:documents\|recurring\|balances\|entities, text, replace}` |
+| POST | `/sage-file` | multipart, campo `file` (.xls/.xlsx) |
+| POST | `/clientes-bancos` | multipart, campo `file` (.xlsx/.xls): substitui a relação cliente-banco e repõe os bancos dos clientes |
+| POST | `/clientes-bancos/reset` | "Repor bancos dos clientes (ficheiro)" |
+| POST | `/reset` | "Repor dados do Sage" (ver acima) |
+
+```bash
+curl -u utilizador:palavra-passe localhost:8080/api/treasury/plan
+curl -u utilizador:palavra-passe -H 'X-Requested-With: XMLHttpRequest' -H 'Content-Type: application/json' \
+  -X POST localhost:8080/api/treasury/recurring \
+  -d '{"desc":"Renda do armazém","cat":"Renda","tipo":"P","valor":"2500,00","banco":"","freq":"Mensal","dia":1,"ini":"01/11/2026","fim":"","fds":"Adiar para dia útil"}'
+curl -u utilizador:palavra-passe -H 'X-Requested-With: XMLHttpRequest' -F file=@clientes_bancos.xlsx localhost:8080/api/treasury/clientes-bancos
+```
+
+## Notas
+
+- Não testado em Docker real (a máquina de desenvolvimento não tem Docker): o build com `gd`/`zip`/Composer e a escrita no volume montado devem ser validados na primeira execução.
+- Backup: copie `data/private/` (contém dados confidenciais: guarde-o cifrado).

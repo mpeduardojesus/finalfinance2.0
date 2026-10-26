@@ -1,0 +1,35 @@
+name: microplasticos-intranet
+
+services:
+  web:
+    build: .
+    image: microplasticos-intranet:latest
+    container_name: microplasticos-intranet
+    ports:
+      - "8080:80"
+    # Variáveis lidas do ficheiro .env (copiar de .env.example).
+    # Se ORACLE_* não estiverem definidas, a app usa data/*.json (modo demo).
+    environment:
+      ORACLE_HOST: ${ORACLE_HOST:-}
+      ORACLE_PORT: ${ORACLE_PORT:-1521}
+      ORACLE_SERVICE: ${ORACLE_SERVICE:-}
+      ORACLE_USER: ${ORACLE_USER:-}
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:-}
+      ORACLE_CHARSET: ${ORACLE_CHARSET:-AL32UTF8}
+      APP_DEBUG: ${APP_DEBUG:-0}
+      # Plano de tesouraria: sem estas duas variáveis o acesso é recusado (503)
+      TREASURY_USER: ${TREASURY_USER:-}
+      TREASURY_PASSWORD: ${TREASURY_PASSWORD:-}
+      TREASURY_DATA_DIR: /var/www/html/data/private
+    volumes:
+      # Código montado para desenvolvimento (alterações refletem-se de imediato)
+      - ./public:/var/www/html/public
+      - ./src:/var/www/html/src
+      - ./views:/var/www/html/views
+      - ./data:/var/www/html/data
+      # Dados CONFIDENCIAIS do Plano de tesouraria (ficheiro Sage, saldos, entradas manuais): só no volume, nunca na imagem.
+      # A pasta no anfitrião tem de existir e ser gravável pelo www-data (uid 33): chmod 770 / chown 33:33 data/private
+      - ./data/private:/var/www/html/data/private
+    # Se o Oracle 19c correr no anfitrião (Linux), descomentar:
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"

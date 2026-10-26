@@ -1,0 +1,37 @@
+/* Plano de tesouraria (sem dados: apenas estilos) */
+.tr-toc { margin-bottom: 15px; }
+.tr-toc > li > a { padding: 6px 10px; font-size: 13px; }
+.tr-caption { margin: 0 0 0 10px; display: inline-block; }
+#tr-root .box-body { overflow-x: auto; }
+.tr-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 12px; }
+.tr-controls .form-group { margin-bottom: 0; }
+.tr-controls label { display: block; font-weight: 600; font-size: 12px; margin-bottom: 2px; color: #555; }
+.tr-controls .checkbox { margin: 0; padding-top: 4px; }
+.tr-table { width: 100%; margin-bottom: 8px; font-size: 13px; }
+.tr-table th { white-space: nowrap; background: #f4f6f9; }
+.tr-table td.num, .tr-table th.num { text-align: right; white-space: nowrap; }
+.tr-table tr.tr-total td { font-weight: 700; background: #f4f6f9; }
+.tr-table tr.tr-neg td { background: #fdf2f2; }
+.tr-table input.form-control, .tr-table select.form-control { height: 28px; padding: 2px 6px; font-size: 13px; min-width: 90px; }
+.tr-table .btn { padding: 1px 8px; font-size: 12px; }
+.tr-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+.tr-note { color: #777; font-size: 12px; margin: 6px 0; }
+.tr-pager { display: flex; gap: 12px; align-items: center; margin: 6px 0 10px; }
+.tr-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 14px; }
+.tr-chart svg { width: 100%; height: auto; background: #fff; }
+.tr-chart h5 { margin: 0 0 4px; font-weight: 600; }
+.tr-chart text { font-size: 10px; fill: #666; }
+.tr-legend span { display: inline-block; margin-right: 12px; font-size: 12px; }
+.tr-legend i { display: inline-block; width: 10px; height: 10px; margin-right: 4px; }
+.tr-io textarea { width: 100%; min-height: 150px; max-height: 360px; font-family: monospace; font-size: 12px; }
+.tr-rules dt { margin-top: 8px; }
+.tr-rules dd { color: #555; }
+.tr-err { color: #dd4b39; font-size: 12px; }
+.tr-ok { color: #00a65a; }
+.tr-demo { margin-bottom: 12px; }
+.tr-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.tr-card { border: 1px solid #e0e4e8; border-radius: 3px; padding: 8px 10px; background: #fafbfc; }
+.tr-card-t { font-size: 12px; color: #666; }
+.tr-card-v { font-size: 20px; font-weight: 700; color: #1f4e79; line-height: 1.3; }
+.tr-card-s { font-size: 11px; color: #888; }
+.tr-table em { font-style: italic; color: #1f4e79; }

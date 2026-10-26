@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Microplasticos | Plano de tesouraria</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/admin-lte/2.4.18/css/AdminLTE.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/admin-lte/2.4.18/css/skins/skin-black.min.css">
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/css/treasury.css">
+</head>
+<body class="hold-transition skin-black sidebar-mini">
+<div class="wrapper">
+
+  <!-- Navbar -->
+  <header class="main-header">
+    <a href="/" class="logo">
+      <span class="logo-lg mp-logo">
+        <svg viewBox="0 0 40 44" width="30" height="33" aria-hidden="true">
+          <polygon points="20,2 37,11 37,33 20,42 3,33 3,11" fill="#fff" stroke="#27456f" stroke-width="3"/>
+          <text x="20" y="27" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="14" fill="#27456f">MP</text>
+        </svg>
+        <b>MICROPLASTICOS</b>
+      </span>
+      <span class="logo-mini mp-logo-mini">
+        <svg viewBox="0 0 40 44" width="28" height="31" aria-hidden="true">
+          <polygon points="20,2 37,11 37,33 20,42 3,33 3,11" fill="#fff" stroke="#27456f" stroke-width="3"/>
+          <text x="20" y="27" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="14" fill="#27456f">MP</text>
+        </svg>
+      </span>
+    </a>
+    <nav class="navbar navbar-static-top" role="navigation">
+      <a href="#" class="sidebar-toggle" data-toggle="push-menu" role="button"><span class="sr-only">Alternar navegação</span></a>
+      <ul class="nav navbar-nav mp-nav-left">
+        <li><a href="/" title="Home"><i class="fa fa-home"></i></a></li>
+      </ul>
+      <div class="navbar-custom-menu">
+        <ul class="nav navbar-nav">
+          <li><a href="#" title="Notificações"><i class="fa fa-bell-o"></i></a></li>
+          <li><a href="#" title="Bandeiras"><i class="fa fa-flag-o"></i></a></li>
+          <li class="user user-menu">
+            <a href="#">
+              <span class="avatar avatar-sm"><i class="fa fa-user"></i></span>
+              <span class="hidden-xs">Eduardo Jesus</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Sidebar -->
+  <aside class="main-sidebar">
+    <section class="sidebar">
+      <div class="user-panel">
+        <div class="pull-left image"><span class="avatar avatar-lg"><i class="fa fa-user"></i></span></div>
+        <div class="pull-left info">
+          <select class="form-control input-sm" aria-label="Utilizador"><option>Eduardo Jesus</option><option>Terminar sessão</option></select>
+        </div>
+      </div>
+      <form action="#" method="get" class="sidebar-form">
+        <div class="input-group">
+          <input type="text" name="q" class="form-control" placeholder="Search">
+          <span class="input-group-btn">
+            <button type="submit" class="btn btn-flat" aria-label="Pesquisar"><i class="fa fa-search"></i></button>
+          </span>
+        </div>
+      </form>
+      <ul class="sidebar-menu" id="sidebar-menu" data-widget="tree">
+        <li class="treeview"><a href="#"><i class="fa fa-spinner fa-spin"></i> <span>A carregar…</span></a></li>
+      </ul>
+    </section>
+  </aside>
+
+  <!-- Conteúdo -->
+  <div class="content-wrapper">
+    <section class="content-header">
+      <h1>Plano de tesouraria <small>Admin. Financeiro · dados confidenciais</small></h1>
+      <ol class="breadcrumb">
+        <li><a href="/"><i class="fa fa-home"></i> Home</a></li>
+        <li>Admin. Financeiro</li>
+        <li class="active">Plano de tesouraria</li>
+      </ol>
+    </section>
+
+    <section class="content" id="tr-root">
+      <div id="tr-banner"></div>
+      <noscript><p class="text-danger">Esta página precisa de JavaScript.</p></noscript>
+
+      <ul class="nav nav-pills tr-toc" id="tr-toc">
+        <li><a href="#dashboard">Dashboard</a></li>
+        <li><a href="#saldos">Saldos e parâmetros</a></li>
+        <li><a href="#plano">Plano de pagamentos</a></li>
+        <li><a href="#sugestoes">Sugestões de otimização</a></li>
+        <li><a href="#entidades">Banco por entidade</a></li>
+        <li><a href="#duplos">Entidades nos dois lados</a></li>
+        <li><a href="#recorrentes">Movimentos recorrentes</a></li>
+        <li><a href="#projecao">Projeção</a></li>
+        <li><a href="#recebimentos">Recebimentos</a></li>
+        <li><a href="#pagamentos">Pagamentos</a></li>
+        <li><a href="#io">Importar/exportar</a></li>
+        <li><a href="#sage">Ficheiros de origem</a></li>
+        <li><a href="#origem">Regras e origem</a></li>
+      </ul>
+
+      <div class="box box-solid mp-box" id="dashboard"><div class="box-header"><h3 class="box-title mp-blue">Dashboard</h3><p class="text-muted tr-caption" id="tr-dash-caption">Indicadores em direto: mudam com os parâmetros, os bancos, os documentos e as atribuições desta página.</p></div><div class="box-body" id="tr-dashboard"><p class="text-muted">A carregar…</p></div></div>
+      <div class="box box-solid mp-box" id="saldos"><div class="box-header"><h3 class="box-title mp-blue">Saldos bancários e parâmetros</h3><p class="text-muted tr-caption">Saldos à data de início, em euros. CCC = linha de conta corrente disponível.</p></div><div class="box-body" id="tr-saldos"></div></div>
+      <div class="box box-solid mp-box" id="plano"><div class="box-header"><h3 class="box-title mp-blue">Plano de pagamentos por banco</h3></div><div class="box-body" id="tr-plano"><p class="text-muted">A carregar…</p></div></div>
+      <div class="box box-solid mp-box" id="sugestoes"><div class="box-header"><h3 class="box-title mp-blue">Plano de sugestões de otimização</h3><p class="text-muted tr-caption">Calculado com os dados e parâmetros atuais. São apenas sugestões: não alteram nada, a decisão é sua.</p></div><div class="box-body" id="tr-sugestoes"></div></div>
+      <div class="box box-solid mp-box" id="entidades"><div class="box-header"><h3 class="box-title mp-blue">Banco por entidade</h3><p class="text-muted tr-caption">Só os clientes têm banco associado: vem do ficheiro de clientes e bancos (coluna Terc. do Sage = código do cliente). Os fornecedores não têm banco: pode atribuir um por fornecedor, ou usar o banco de pagamento por defeito. Um banco escolhido num documento prevalece.</p></div><div class="box-body" id="tr-entidades"></div></div>
+      <div class="box box-solid mp-box" id="duplos"><div class="box-header"><h3 class="box-title mp-blue">Entidades nos dois lados</h3><p class="text-muted tr-caption">Terceiros com contas de cliente e de fornecedor no Sage.</p></div><div class="box-body" id="tr-duplos"></div></div>
+      <div class="box box-solid mp-box" id="recorrentes"><div class="box-header"><h3 class="box-title mp-blue">Movimentos recorrentes</h3><p class="text-muted tr-caption">Rendas, salários, impostos, seguros e outros movimentos que se repetem. A página gera as datas dentro do horizonte e trata cada ocorrência como um documento de origem Recorrente, que entra na projeção, no plano por banco, no dashboard e nas sugestões.</p></div><div class="box-body" id="tr-recorrentes"></div></div>
+      <div class="box box-solid mp-box" id="projecao"><div class="box-header"><h3 class="box-title mp-blue">Projeção de tesouraria</h3></div><div class="box-body" id="tr-projecao"></div></div>
+      <div class="box box-solid mp-box" id="recebimentos"><div class="box-header"><h3 class="box-title mp-blue">Recebimentos de clientes</h3></div><div class="box-body" id="tr-docs-R"></div></div>
+      <div class="box box-solid mp-box" id="pagamentos"><div class="box-header"><h3 class="box-title mp-blue">Pagamentos a fornecedores e outros</h3></div><div class="box-body" id="tr-docs-P"></div></div>
+      <div class="box box-solid mp-box" id="io"><div class="box-header"><h3 class="box-title mp-blue">Importar e exportar</h3></div><div class="box-body" id="tr-io"></div></div>
+      <div class="box box-solid mp-box" id="sage"><div class="box-header"><h3 class="box-title mp-blue">Ficheiros de origem (Sage X3 e clientes e bancos)</h3></div><div class="box-body" id="tr-sage"></div></div>
+      <div class="box box-solid mp-box" id="origem"><div class="box-header"><h3 class="box-title mp-blue">Regras e origem dos dados</h3></div><div class="box-body" id="tr-origem"></div></div>
+    </section>
+  </div>
+
+  <footer class="main-footer">
+    <div class="pull-right hidden-xs">Documento confidencial · não partilhar</div>
+    <strong>Microplasticos Intranet</strong>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/admin-lte/2.4.18/js/adminlte.min.js"></script>
+<script src="/assets/js/treasury.js"></script>
+</body>
+</html>

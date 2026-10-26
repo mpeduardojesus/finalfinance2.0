@@ -1,0 +1,165 @@
+[
+  {
+    "id": "informacao",
+    "label": "Informação",
+    "icon": "fa-desktop",
+    "children": [
+      {
+        "label": "Comunicações Internas",
+        "url": "#"
+      },
+      {
+        "label": "Sabias Que",
+        "url": "#"
+      },
+      {
+        "label": "Documentos",
+        "url": "#"
+      }
+    ]
+  },
+  {
+    "id": "comercial",
+    "label": "Comercial",
+    "icon": "fa-pencil-square-o",
+    "children": [
+      {
+        "label": "Clientes",
+        "url": "#"
+      },
+      {
+        "label": "Encomendas",
+        "url": "#"
+      },
+      {
+        "label": "Orçamentos",
+        "url": "#"
+      }
+    ]
+  },
+  {
+    "id": "fabril",
+    "label": "Fabril",
+    "icon": "fa-bar-chart",
+    "children": [
+      {
+        "label": "Produção",
+        "url": "#"
+      },
+      {
+        "label": "Planeamento",
+        "url": "#"
+      },
+      {
+        "label": "Manutenção",
+        "url": "#"
+      }
+    ]
+  },
+  {
+    "id": "engenharia",
+    "label": "Engenharia",
+    "icon": "fa-dot-circle-o",
+    "children": [
+      {
+        "label": "Projetos",
+        "url": "#"
+      },
+      {
+        "label": "Fichas Técnicas",
+        "url": "#"
+      }
+    ]
+  },
+  {
+    "id": "logistica",
+    "label": "Logística",
+    "icon": "fa-calendar",
+    "children": [
+      {
+        "label": "Armazém",
+        "url": "#"
+      },
+      {
+        "label": "Expedição",
+        "url": "#"
+      },
+      {
+        "label": "Compras",
+        "url": "#"
+      }
+    ]
+  },
+  {
+    "id": "qualidade",
+    "label": "Qualidade",
+    "icon": "fa-check",
+    "children": [
+      {
+        "label": "Não Conformidades",
+        "url": "#"
+      },
+      {
+        "label": "Auditorias",
+        "url": "#"
+      },
+      {
+        "label": "Ambiente",
+        "url": "#"
+      }
+    ]
+  },
+  {
+    "id": "geral",
+    "label": "Geral",
+    "icon": "fa-building-o",
+    "children": [
+      {
+        "label": "Contactos",
+        "url": "#"
+      },
+      {
+        "label": "Salas de Reunião",
+        "url": "#"
+      }
+    ]
+  },
+  {
+    "id": "rh",
+    "label": "R.H.",
+    "icon": "fa-users",
+    "children": [
+      {
+        "label": "Férias",
+        "url": "#"
+      },
+      {
+        "label": "Formação",
+        "url": "#"
+      },
+      {
+        "label": "Recibos",
+        "url": "#"
+      }
+    ]
+  },
+  {
+    "id": "financeiro",
+    "label": "Admin. Financeiro",
+    "icon": "fa-calculator",
+    "children": [
+      {
+        "label": "Despesas",
+        "url": "#"
+      },
+      {
+        "label": "Faturação",
+        "url": "#"
+      },
+      {
+        "label": "Plano de tesouraria",
+        "url": "/treasury"
+      }
+    ]
+  }
+]

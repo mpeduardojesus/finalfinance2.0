@@ -1,0 +1,93 @@
+{
+    "version": 1,
+    "settings": {
+        "inicio": "",
+        "horiz": "10",
+        "vista": "Semanal",
+        "useCCC": false,
+        "netting": true,
+        "incPend": true,
+        "incOut": true,
+        "incRec": true,
+        "ruleR": "0",
+        "ruleP": "0",
+        "defBankR": "",
+        "defBankP": "",
+        "modoP": "Sugerido",
+        "crit": "Maior folga"
+    },
+    "banks": [
+        {
+            "id": "ba",
+            "nome": "Banco Exemplo A",
+            "saldo": 25000.0,
+            "ccc": 50000.0
+        },
+        {
+            "id": "bb",
+            "nome": "Banco Exemplo B",
+            "saldo": 4000.0,
+            "ccc": 0.0
+        },
+        {
+            "id": "bc",
+            "nome": "Banco Exemplo C",
+            "saldo": 0.0,
+            "ccc": 0.0
+        }
+    ],
+    "partyBank": {},
+    "classOv": {},
+    "prio": [
+        "ba",
+        "bb",
+        "bc"
+    ],
+    "recs": [
+        {
+            "id": "rdemo1",
+            "desc": "Renda do armazém (exemplo)",
+            "cat": "Renda",
+            "tipo": "P",
+            "valor": 2500.0,
+            "banco": "",
+            "freq": "Mensal",
+            "dia": 1,
+            "ini": "2026-11-01",
+            "fim": "",
+            "fds": "Adiar para dia útil",
+            "ativo": true
+        }
+    ],
+    "manual": [
+        {
+            "id": "mdemo1",
+            "tipo": "P",
+            "tdoc": "Out",
+            "doc": "Salários (exemplo)",
+            "parte": "Salários",
+            "party": "",
+            "venc": "2026-10-30",
+            "valor": 18000.0,
+            "banco": "ba",
+            "dataPlan": "",
+            "origem": "Fora do Sage · Contas",
+            "flag": ""
+        },
+        {
+            "id": "mdemo2",
+            "tipo": "P",
+            "tdoc": "Man",
+            "doc": "Prestação leasing (exemplo)",
+            "parte": "Leasing Exemplo",
+            "party": "",
+            "venc": "2026-11-15",
+            "valor": 1200.0,
+            "banco": "bb",
+            "dataPlan": "",
+            "origem": "Manual",
+            "flag": ""
+        }
+    ],
+    "overrides": {}
+}

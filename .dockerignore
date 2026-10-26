@@ -1,0 +1,16 @@
+.git
+.env
+*.zip
+screenshot*.png
+# --- Dados confidenciais do Plano de tesouraria: nunca na imagem ---
+data/private
+**/*.xls
+**/*.xlsx
+**/*.xlsm
+**/*.xlsb
+**/*.csv
+**/*.bak
+# dependências instaladas dentro da imagem (composer install no build); testes/ferramentas só para desenvolvimento
+vendor
+tests
+tools

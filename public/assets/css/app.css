@@ -1,0 +1,62 @@
+body, .main-header .navbar, h1, h2, h3, h4, h5, h6 { font-family: "Source Sans Pro", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+
+/* Navbar branca + logo placeholder */
+.skin-black .main-header .logo { background: #fff; border-right: 0; border-bottom: 1px solid #fff; }
+.skin-black .main-header .navbar { background: #fff; border-bottom: 0; }
+.mp-logo { display: inline-flex; align-items: center; gap: 8px; color: #27456f; font-size: 13px; letter-spacing: .5px; }
+.mp-logo b { font-weight: 800; letter-spacing: 1px; }
+.mp-logo-mini { line-height: 50px; }
+.mp-logo svg { flex: none; }
+.mp-logo-mini svg { vertical-align: middle; }
+.mp-nav-left > li > a { font-size: 18px; padding: 15px 12px; color: #333; }
+.navbar-custom-menu .nav > li > a { color: #333; }
+.avatar { display: inline-block; border-radius: 50%; background: #6b6b6b; color: #cfcfcf; text-align: center; overflow: hidden; vertical-align: middle; }
+.avatar-sm { width: 26px; height: 26px; line-height: 30px; font-size: 18px; margin-right: 6px; }
+.avatar-lg { width: 45px; height: 45px; line-height: 56px; font-size: 34px; border: 2px solid #d9d9d9; background: #4b4540; color: #b8a99a; }
+
+/* Sidebar escura */
+.skin-black .main-sidebar, .skin-black .left-side { background: #2f3438; }
+.skin-black .sidebar-menu > li > a { color: #e3e6e8; border-left: 0; }
+.skin-black .sidebar-menu > li:hover > a, .skin-black .sidebar-menu > li.active > a { background: #262a2d; color: #fff; }
+.skin-black .sidebar-menu > li > .treeview-menu { background: #25292c; }
+.skin-black .treeview-menu > li > a { color: #a9b0b5; }
+.skin-black .treeview-menu > li > a:hover { color: #fff; }
+.skin-black .sidebar-menu > li > a > .fa:first-child { width: 20px; }
+.user-panel { padding: 12px 10px; height: 70px; overflow: hidden; }
+.user-panel > .info { padding: 8px 5px 5px 0; left: 58px; line-height: 1; }
+.user-panel > .info > select { width: 130px; height: 26px; padding: 2px 6px; font-size: 12px; border-radius: 0; background: #fff; }
+.skin-black .sidebar-form { border: 1px solid #1c1f22; border-radius: 0; margin: 0 0 4px; background: #272b2e; }
+.skin-black .sidebar-form input[type=text], .skin-black .sidebar-form .btn { background: #272b2e; color: #ddd; height: 28px; }
+.skin-black .sidebar-form .btn { background: #fff; color: #333; width: 30px; padding: 0; }
+.sidebar-mini.sidebar-collapse .user-panel .info, .sidebar-mini.sidebar-collapse .sidebar-form { display: none; }
+
+/* Conteúdo */
+.content-wrapper, .right-side { background: #ecf0f5; }
+.content-header > h1 { font-size: 22px; font-weight: 400; color: #222; }
+.content-header > .breadcrumb > li > a { color: #333; }
+.mp-box { border-top: 3px solid #d2d6de; border-radius: 0; position: relative; }
+.mp-box .box-title { font-size: 18px; }
+.mp-blue { color: #3c8dbc; }
+.mp-box .box-header .btn-box-tool { color: #777; }
+.mp-list .mp-row { padding: 6px 8px; background: #f9f9f9; margin-bottom: 0; }
+.mp-list .mp-row.hl { background: #fcebd4; }
+.mp-date { color: #c00; font-weight: 600; margin-right: 10px; }
+.mp-dept { color: #111; }
+.mp-list .mp-row a, .mp-fact a { color: #337ab7; }
+.mp-fact { background: #f4f4f4; padding: 8px 14px; color: #333; }
+.mp-fact a { color: #333; }
+.mp-fact a:hover { color: #337ab7; }
+.mp-edit { position: absolute; right: 8px; top: 4px; color: #111; z-index: 2; }
+
+/* Banner Missão Social (CSS puro) */
+.mp-missao .box-title { font-size: 16px; font-weight: 400; }
+.mp-banner { position: relative; background: #172a55; color: #fff; padding: 36px 24px 40px; text-align: center; min-height: 440px; overflow: hidden; }
+.mp-banner-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 70px; }
+.mp-banner-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 12px; letter-spacing: .5px; }
+.mp-banner-heart { color: #2fd6c2; font-size: 30px; }
+.mp-banner .hl { color: #2fd6c2; }
+.mp-banner-title { font-family: "Trebuchet MS", "Segoe UI", sans-serif; font-weight: 800; font-size: 29px; line-height: 1.5; letter-spacing: 1.5px; margin: 0 0 70px; }
+.mp-banner-sub { font-size: 14px; line-height: 1.5; margin: 0; }
+.mp-banner-arrow { position: absolute; bottom: 8px; color: rgba(255,255,255,.6); font-size: 14px; }
+.mp-banner-arrow.left { left: 40px; } .mp-banner-arrow.right { right: 40px; }
+@media (max-width: 767px) { .mp-banner-title { font-size: 22px; } }

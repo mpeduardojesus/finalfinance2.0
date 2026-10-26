@@ -1,2 +1,14 @@
-node_modules/
-.build/
+.env
+screenshot*.tmp
+*.zip
+vendor/
+# Dados confidenciais (Sage, bancos, entradas manuais): nunca no repositório
+data/private/*
+!data/private/.gitkeep
+*.xls
+*.xlsx
+*.xlsm
+*.bak
+screenshot-tesouraria.png
+!data/sample/sage-open-items-sample.xls
+!data/sample/clientes-bancos-sample.xlsx
