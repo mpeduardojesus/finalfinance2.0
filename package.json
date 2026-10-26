@@ -1,0 +1,10 @@
+{
+  "name": "finalfinance2.0",
+  "private": true,
+  "description": "Plano de tesouraria (Final Finance 2.0): núcleo de cálculo e testes",
+  "scripts": {
+    "pretest": "esbuild tests/core.test.ts --bundle --platform=node --format=esm --outfile=.build/core.test.mjs",
+    "test": "node --test .build/core.test.mjs && node tests/fidelity.mjs"
+  },
+  "devDependencies": { "esbuild": "^0.25.0" }
+}
