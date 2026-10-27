@@ -80,7 +80,7 @@
   var st = null;      // /state
   var plan = null;    // /plan
   var ui = {
-    planBank: '', planPeriod: '-1', planPage: 0, showRec: true,
+    planBank: '', planPeriod: '-1', planPage: 0, showRec: true, showFat: false,
     medida: 'Saldo final', chartBank: TOTAL,
     filt: { R: { bank: '', prazo: '', q: '', page: 0 }, P: { bank: '', prazo: '', q: '', page: 0 } },
     edit: { R: null, P: null },
@@ -118,7 +118,7 @@
   }
   function badge(tone, text) { return h('span', { class: 'label label-' + tone, text: text }); }
   function estadoBadge(e) {
-    return e === 'falta' ? badge('danger', 'Falta de fundos') : e === 'ccc' ? badge('warning', 'Recorre à CCC') : badge('success', 'Coberto');
+    return e === 'falta' ? badge('danger', 'Falta de fundos') : e === 'ccc' ? badge('warning', 'Usa CCC') : badge('success', 'Coberto');
   }
   function table(cols, rows, align, rowClasses) {
     var thead = h('thead', {}, h('tr', {}, cols.map(function (c, i) { return h('th', { class: align && align[i] === 'end' ? 'num' : '', text: c }); })));
@@ -237,7 +237,7 @@
     var sg = plan.sugerido;
     var modoText = s.modoP === 'Sugerido'
       ? (sg.n > 0
-        ? 'Banco sugerido para ' + sg.n + ' pagamentos (' + eur(sg.v) + '), pelo critério ' + s.crit.toLowerCase() + ': ' + vis.filter(function (r) { return r.sugN > 0; }).map(function (r) { return r.nome + ' ' + eur(r.sugT) + ' (' + r.sugN + ')'; }).join(' · ') + '. ' +
+        ? 'Banco sugerido para ' + sg.n + ' pagamentos (' + sg.docs + ' documentos, ' + eur(sg.v) + '), pelo critério ' + s.crit.toLowerCase() + ': ' + vis.filter(function (r) { return r.sugN > 0; }).map(function (r) { return r.nome + ' ' + eur(r.sugT) + ' (' + r.sugN + ')'; }).join(' · ') + '. ' +
           (sg.badN > 0 ? sg.badN + ' pagamentos (' + eur(sg.badV) + ') não cabem em nenhum banco: ficam no banco com menos falta e precisam de transferência ou CCC. ' : 'Todos cabem num banco. ') +
           'Um banco atribuído a um documento ou a um fornecedor, ou o banco de pagamento por defeito, prevalece sobre a sugestão.'
         : 'Sem pagamentos a sugerir: todos têm banco atribuído.')
@@ -252,6 +252,17 @@
         return [r.nome, eur(r.saldo), eur(r.recT), eur(r.pagT), r.sugN > 0 ? r.sugN + ' · ' + eur(r.sugT) : '—', eur(r.final), eur(r.min), r.first ? dm(r.first) : '—', r.need > 0 ? eur(r.need) : '—', estadoBadge(r.estado)];
       }), ['start', 'end', 'end', 'end', 'end', 'end', 'end', 'end', 'end', 'start']));
 
+    box.appendChild(table(['Banco', 'Saldo mínimo exigido', 'Limite da CCC', 'Utilizações', 'Reposições', 'Utilizada no fim', 'Pico utilizado', 'Disponível no fim'],
+      vis.filter(function (r) { return r.id !== SEM; }).map(function (r) {
+        return [r.nome, eur(r.minimo), eur(r.ccc), r.cuN + ' · ' + eur(r.cuT), r.crN + ' · ' + eur(r.crT), eur(r.usedFim), eur(r.usedMax), eur(r.ccc - r.usedFim)];
+      }), ['start', 'end', 'end', 'end', 'end', 'end', 'end', 'end']));
+    var ag = plan.agrup;
+    box.appendChild(h('p', { class: 'tr-note', text: ag.ligado
+      ? 'Pagamentos a fornecedores agrupados por fornecedor e semana ISO: ' + ag.n + ' pagamentos de ' + ag.docs + ' faturas, pagos à sexta-feira ou ao dia escolhido nos parâmetros (regra: ' +
+        (plan.regraDia === 'sem' ? 'dia de pagamento da semana ISO do vencimento' : 'dia de pagamento anterior ou igual ao vencimento mais antigo, nunca antes do início; vencidos no primeiro dia de pagamento a partir do início') +
+        '). Documentos com data planeada alterada, pagamentos fora do Sage e movimentos recorrentes mantêm a sua data.'
+      : 'Agrupamento desligado: cada fatura é paga na sua própria data.' }));
+
     if (!ui.planBank) ui.planBank = plan.defaultBank;
     if (!res.some(function (r) { return r.id === ui.planBank; })) ui.planBank = plan.defaultBank;
     var periodOpts = [{ value: '-1', label: 'Todos' }].concat(plan.periods.map(function (p, i) { return { value: String(i), label: p.label }; }));
@@ -259,7 +270,8 @@
     box.appendChild(h('div', { class: 'tr-controls' },
       field('Banco em detalhe', select(res.map(function (r) { return { value: r.id, label: r.nome }; }), ui.planBank, function (v) { ui.planBank = v; ui.planPage = 0; loadPlanDetail(); })),
       field('Período', select(periodOpts, ui.planPeriod, function (v) { ui.planPeriod = v; ui.planPage = 0; loadPlanDetail(); })),
-      check('Mostrar recebimentos', ui.showRec, function (v) { ui.showRec = v; ui.planPage = 0; loadPlanDetail(); })));
+      check('Mostrar recebimentos', ui.showRec, function (v) { ui.showRec = v; ui.planPage = 0; loadPlanDetail(); }),
+      check('Mostrar as faturas de cada grupo', ui.showFat, function (v) { ui.showFat = v; ui.planPage = 0; loadPlanDetail(); })));
     box.appendChild(h('div', { id: 'tr-plan-detail' }));
     loadPlanDetail();
   }
@@ -270,9 +282,8 @@
   }
 
   function loadPlanDetail() {
-    var box = $('tr-plan-detail');
-    if (!box) return;
-    req('GET', '/api/treasury/plan/detail?' + qs({ bank: ui.planBank, period: ui.planPeriod, rec: ui.showRec ? 1 : 0, page: ui.planPage })).then(function (d) {
+    var box = clear($('tr-plan-detail'));
+    req('GET', '/api/treasury/plan/detail?' + qs({ bank: ui.planBank, period: ui.planPeriod, rec: ui.showRec ? 1 : 0, fat: ui.showFat ? 1 : 0, page: ui.planPage })).then(function (d) {
       clear(box);
       if (!d.bank) return;
       if (d.rows.length) {
@@ -280,12 +291,20 @@
         var rows = d.rows.map(function (r) {
           if (r.k === 'tot') {
             return ['Total ' + r.label, '', '', '', '', eur(r.pag), eur(r.rec), eur(r.saldo),
-              r.estado === 'neg' ? badge('danger', 'Saldo negativo') : r.estado === 'ccc' ? badge('warning', 'Usa CCC') : badge('success', 'OK'), ''];
+              r.estado === 'abaixo' ? badge('danger', 'Abaixo do mínimo') : r.estado === 'ccc' ? badge('warning', 'CCC utilizada ' + eur(r.used)) : badge('success', 'OK'), ''];
           }
-          var origem = r.sug ? h('em', { text: 'Sugerido: ' + (r.sug.ok ? 'folga de ' + eur(r.sug.head) + ' depois do pagamento' : 'nenhum banco cobre; faltam ' + eur(-r.sug.head) + ' (transferência ou CCC)') })
+          if (r.k === 'ccc') {
+            return [fmtD(r.date), r.semanaIso, 'CCC', r.texto, '', r.mov === 'R' ? eur(r.valor) : '', r.mov === 'U' ? eur(r.valor) : '', eur(r.saldo), 'CCC utilizada: ' + eur(r.used), r.nota];
+          }
+          if (r.k === 'fat') {
+            return ['', '', '↳ fatura', r.doc || '—', r.parte || '—', eur(r.valor), '', '', 'vence ' + fmtD(r.venc), ''];
+          }
+          var origem = r.sug ? h('em', { text: 'Sugerido: ' + (r.sug.ok ? 'folga de ' + eur(r.sug.head) + ' depois do pagamento e do saldo mínimo' + (r.sug.ccc ? ' (com CCC)' : '') : 'nenhum banco cobre; faltam ' + eur(-r.sug.head) + ' (transferência ou CCC)') })
             : r.tipo === 'P' ? (r.origemBanco === 'documento' ? 'Banco do documento' : r.origemBanco === 'fornecedor' ? 'Banco do fornecedor' : 'Banco por defeito') : '';
           return [fmtD(r.date) + (r.atraso ? ' · vencido' : '') + (r.alterada ? ' · data alterada' : ''), r.semanaIso,
-            (r.rec ? '↻ ' : '') + (r.tipo === 'R' ? 'Rec. ' : 'Pag. ') + r.tdoc, r.doc || '—', r.sug ? h('em', { text: r.parte || '—' }) : (r.parte || '—'),
+            (r.rec ? '↻ ' : '') + (r.tipo === 'R' ? 'Rec. ' : 'Pag. ') + (r.grupo ? 'grupo' : r.tdoc),
+            r.grupo ? r.grupo + ' faturas · ' + (r.vencSemana || '—') : (r.doc || '—'),
+            r.sug ? h('em', { text: r.parte || '—' }) : (r.parte || '—'),
             r.tipo === 'P' ? eur(r.valor) : '', r.tipo === 'R' ? eur(r.valor) : '', eur(r.saldo),
             r.estado === 'falta' ? badge('danger', 'Falta de fundos') : r.estado === 'ccc' ? badge('warning', 'Usa CCC') : '', origem];
         });
@@ -296,13 +315,11 @@
       }
       if (d.pages > 1) box.appendChild(pager(d.page, d.pages, d.total, function (p) { ui.planPage = p; loadPlanDetail(); }));
       var b = d.bank;
-      box.appendChild(h('p', { class: 'tr-note', text: b.nome + ': saldo inicial ' + eur(b.saldo) + (st.settings.useCCC && b.ccc ? ' mais CCC ' + eur(b.ccc) : '') +
-        '. No mesmo dia os recebimentos entram antes dos pagamentos; o saldo após cada pagamento mostra onde faltam fundos. Créditos aparecem com sinal negativo na coluna do seu lado.' }));
+      box.appendChild(h('p', { class: 'tr-note', text: b.nome + ': saldo inicial ' + eur(b.saldo) + ', saldo mínimo da conta à ordem ' + eur(b.minimo) + (d.useCCC && b.ccc ? ', limite da CCC ' + eur(b.ccc) : '') +
+        '. No mesmo dia os recebimentos entram antes dos pagamentos; o saldo após cada pagamento é o da conta à ordem, já com a CCC utilizada ou reposta. Créditos aparecem com sinal negativo na coluna do seu lado.' }));
     }).catch(function (e) { fail(e, box); });
   }
 
-
-  // ------------------------------------------------------------------ dashboard
   function card(title, value, sub) {
     return h('div', { class: 'tr-card' }, h('div', { class: 'tr-card-t', text: title }), h('div', { class: 'tr-card-v', text: value }), h('div', { class: 'tr-card-s', text: sub }));
   }
@@ -316,7 +333,11 @@
       var nShort = d.shortBanks.length;
       box.appendChild(h('div', { class: 'tr-cards' },
         card('Saldo total', eur(d.saldo0), d.nBanks + ' bancos'),
-        card('CCC disponível', eur(d.ccc), d.useCCC ? 'conta como fundos disponíveis' : 'não conta como fundos (ver parâmetros)'),
+        card('CCC disponível (limite)', eur(d.ccc), d.useCCC ? 'usada quando falta saldo, em múltiplos de ' + eur(d.step) : 'desligada (ver parâmetros)'),
+        card('CCC utilizada no fim do horizonte', eur(d.usedFim), 'soma dos picos de cada banco: ' + eur(d.usedPk)),
+        card('CCC: utilizações no horizonte', eur(d.cuT), d.cuN + ' utilizações'),
+        card('CCC: reposições no horizonte', eur(d.crT), d.crN + ' reposições (a CCC volta a ficar livre)'),
+        card('Pagamentos agrupados à sexta-feira', String(d.agrup.n), d.agrup.ligado ? d.agrup.docs + ' faturas por fornecedor e semana' : 'agrupamento desligado'),
         card('Liquidez total', eur(d.saldo0 + d.ccc), 'saldo mais CCC'),
         card('Recebimentos no horizonte', eur(d.recH), 'no plano, depois das regras de vencidos'),
         card('Pagamentos no horizonte', eur(d.pagH), 'no plano, depois das regras de vencidos'),
@@ -344,7 +365,7 @@
         box.appendChild(table(['Banco em falta', 'Saldo inicial', 'Saldo mínimo', '1.ª falta', 'Períodos em falta', 'Necessidade máx.'],
           d.shortBanks.map(function (r) { return [r.nome, eur(r.saldo), eur(r.min), r.first ? fmtD(r.first) : '—', r.periodos + ' de ' + d.nPeriods, eur(r.need)]; }), ['start', 'end', 'end', 'start', 'end', 'end']));
       } else {
-        box.appendChild(h('div', { class: 'callout callout-success' }, h('h4', { text: 'Sem faltas de fundos.' }), h('p', { text: 'Nenhum banco fica negativo no horizonte com os parâmetros atuais.' })));
+        box.appendChild(h('div', { class: 'callout callout-success' }, h('h4', { text: 'Sem faltas de fundos.' }), h('p', { text: 'Nenhum banco fica abaixo do saldo mínimo no horizonte, depois de usar a CCC, com os parâmetros atuais.' })));
       }
       box.appendChild(table(['Antiguidade dos vencidos', 'A receber', 'Docs', 'A pagar', 'Docs'],
         d.bands.map(function (b, i) { return [b, eur(R.aging[i]), String(R.agingN[i]), eur(P.aging[i]), String(P.agingN[i])]; }), ['start', 'end', 'end', 'end', 'end']));
@@ -496,6 +517,7 @@
       var nome = h('input', { class: 'form-control', value: b.nome });
       var saldo = h('input', { class: 'form-control', value: fmtIn(b.saldo), placeholder: '0,00' });
       var ccc = h('input', { class: 'form-control', value: fmtIn(b.ccc), placeholder: '0,00' });
+      var minimo = h('input', { class: 'form-control', value: fmtIn(b.minimo), placeholder: '5000,00' });
       var status = h('span', { class: 'tr-err' });
       var save = function (inp, key) {
         return function () {
@@ -503,8 +525,8 @@
           req('PUT', '/api/treasury/banks/' + encodeURIComponent(b.id), body).then(function (nb) {
             clear(status);
             var cur = st.banks.filter(function (x) { return x.id === b.id; })[0] || b;
-            cur.nome = nb.nome; cur.saldo = nb.saldo; cur.ccc = nb.ccc;
-            saldo.value = fmtIn(nb.saldo); ccc.value = fmtIn(nb.ccc);
+            cur.nome = nb.nome; cur.saldo = nb.saldo; cur.ccc = nb.ccc; cur.minimo = nb.minimo;
+            saldo.value = fmtIn(nb.saldo); ccc.value = fmtIn(nb.ccc); minimo.value = fmtIn(nb.minimo);
             updateBankTotals();
             if (key === 'nome') renderSettings();
             refreshAll({ saldos: true });
@@ -514,26 +536,32 @@
       nome.addEventListener('change', save(nome, 'nome'));
       saldo.addEventListener('change', save(saldo, 'saldo'));
       ccc.addEventListener('change', save(ccc, 'ccc'));
-      return [nome, saldo, ccc, status, btn('Remover', 'btn-default', function () {
+      minimo.addEventListener('change', save(minimo, 'minimo'));
+      return [nome, saldo, ccc, minimo, status, btn('Remover', 'btn-default', function () {
         if (!window.confirm('Remover o banco "' + (b.nome || '') + '"? As atribuições a este banco ficam sem banco.')) return;
         req('DELETE', '/api/treasury/banks/' + encodeURIComponent(b.id)).then(function () { return refreshAll(); }).catch(function (e) { msg($('tr-bankmsg'), errText(e)); });
       })];
     });
-    rows.push([h('strong', { text: 'Total' }), h('span', { id: 'tr-tot-saldo', text: eur(sum(st.banks.map(function (b) { return b.saldo; }))) }), h('span', { id: 'tr-tot-ccc', text: eur(sum(st.banks.map(function (b) { return b.ccc; }))) }), '', '']);
-    box.appendChild(table(['Banco', 'Saldo inicial (€)', 'CCC disponível (€)', 'Validação', 'Ações'], rows));
+    rows.push([h('strong', { text: 'Total' }), h('span', { id: 'tr-tot-saldo', text: eur(sum(st.banks.map(function (b) { return b.saldo; }))) }), h('span', { id: 'tr-tot-ccc', text: eur(sum(st.banks.map(function (b) { return b.ccc; }))) }), h('span', { id: 'tr-tot-min', text: eur(sum(st.banks.map(function (b) { return b.minimo; }))) }), '', '']);
+    box.appendChild(table(['Banco', 'Saldo inicial (€)', 'CCC disponível (€)', 'Saldo mínimo da conta à ordem (€)', 'Validação', 'Ações'], rows));
     box.appendChild(h('div', { class: 'tr-controls' }, btn('Adicionar banco', 'btn-default', function () {
-      req('POST', '/api/treasury/banks', { nome: 'Novo banco', saldo: '0,00', ccc: '0,00' }).then(function () { return refreshAll(); }).catch(function (e) { msg($('tr-bankmsg'), errText(e)); });
+      req('POST', '/api/treasury/banks', { nome: 'Novo banco', saldo: '0,00', ccc: '0,00', minimo: '5000,00' }).then(function () { return refreshAll(); }).catch(function (e) { msg($('tr-bankmsg'), errText(e)); });
     })));
   }
   function updateBankTotals() {
-    var a = $('tr-tot-saldo'), c = $('tr-tot-ccc');
+    var a = $('tr-tot-saldo'), c = $('tr-tot-ccc'), m = $('tr-tot-min');
+    if (m) m.textContent = eur(sum(st.banks.map(function (b) { return b.minimo; })));
     if (a) a.textContent = eur(sum(st.banks.map(function (b) { return b.saldo; })));
     if (c) c.textContent = eur(sum(st.banks.map(function (b) { return b.ccc; })));
   }
 
   function saveSetting(patch) {
-    return req('PUT', '/api/treasury/settings', patch).then(function (s) { st.settings = s; return refreshAll({ saldos: true }); })
-      .catch(function (e) { msg($('tr-bankmsg'), errText(e)); return refreshAll(); });
+    return req('PUT', '/api/treasury/settings', patch).then(function (s) {
+      st.settings = s;
+      if ('horiz' in patch || 'fim' in patch || 'vista' in patch || 'inicio' in patch) renderSettings();
+      return refreshAll({ saldos: true });
+    })
+      .catch(function (e) { msg($('tr-bankmsg'), errText(e)); renderSettings(); return refreshAll({ saldos: true }); });
   }
 
   function renderSettings() {
@@ -545,11 +573,24 @@
     if (!ruleOptsP.some(function (o) { return o.value === s.ruleP; })) ruleOptsP.push({ value: s.ruleP, label: s.ruleP + ' dias após o início' });
     var inicio = h('input', { class: 'form-control', value: s.inicio ? fmtD(s.inicio) : '', placeholder: fmtD(st.ref) + ' (data do Sage)', style: 'width:200px' });
     inicio.addEventListener('change', function () { saveSetting({ inicio: inicio.value }); });
+    var fim = h('input', { class: 'form-control', value: s.fim ? fmtD(s.fim) : '', placeholder: 'Automática: ' + fmtD(plan.end), style: 'width:200px' });
+    fim.addEventListener('change', function () { saveSetting({ fim: fim.value }); });
+    var horizOpts = {};
+    ['4', '6', '8', '10', '12', '16', '20', '26', String(s.horiz)].forEach(function (w) { horizOpts[w] = true; });
     box.appendChild(h('div', { class: 'tr-controls' },
       field('Data de início', inicio),
-      field('Horizonte', select(['4', '6', '8', '10', '12', '16', '20', '26'].map(function (w) { return { value: w, label: w + ' semanas' }; }), String(s.horiz), function (v) { saveSetting({ horiz: v }); })),
-      field('Vista', segmented([{ value: 'Semanal', label: 'Semanal' }, { value: 'Diária', label: 'Diária' }], s.vista, function (v) { saveSetting({ vista: v }).then(renderSettings); })),
-      check('Contar CCC como fundos disponíveis', s.useCCC, function (v) { saveSetting({ useCCC: v }); })));
+      field('Horizonte', select(Object.keys(horizOpts).sort(function (a, b) { return Number(a) - Number(b); }).map(function (w) { return { value: w, label: w + ' semanas' }; }), String(s.horiz), function (v) { saveSetting({ horiz: v }); })),
+      field('Data final', fim),
+      field('Vista', segmented([{ value: 'Semanal', label: 'Semanal' }, { value: 'Mensal', label: 'Mensal' }, { value: 'Diária', label: 'Diária' }], s.vista, function (v) { ui.planPeriod = '-1'; saveSetting({ vista: v }); }))));
+    var passo = h('input', { class: 'form-control', value: s.passo !== undefined ? fmtIn(Number(s.passo)).replace(',00', '') : '5000', placeholder: '5000', style: 'width:160px' });
+    passo.addEventListener('change', function () { saveSetting({ passo: passo.value }); });
+    box.appendChild(h('div', { class: 'tr-controls' },
+      check('Agrupar por fornecedor e semana e pagar à sexta-feira', s.agrup, function (v) { saveSetting({ agrup: v }); }),
+      field('Dia de pagamento', select([{ value: '0', label: 'Segunda-feira' }, { value: '1', label: 'Terça-feira' }, { value: '2', label: 'Quarta-feira' }, { value: '3', label: 'Quinta-feira' }, { value: '4', label: 'Sexta-feira (por defeito)' }], String(s.diaPag), function (v) { saveSetting({ diaPag: v }); })),
+      field('Regra do dia de pagamento', select([{ value: 'ant', label: 'Dia de pagamento anterior ou igual ao vencimento mais antigo (por defeito)' }, { value: 'sem', label: 'Dia de pagamento da semana ISO do vencimento' }], s.regraDia, function (v) { saveSetting({ regraDia: v }); })),
+      check('Usar CCC quando falta saldo', s.useCCC, function (v) { saveSetting({ useCCC: v }); }),
+      check('Repor a CCC quando há saldo disponível', s.repor, function (v) { saveSetting({ repor: v }); }),
+      field('Múltiplo de utilização da CCC (€)', passo)));
     box.appendChild(h('div', { class: 'tr-controls' },
       field('Recebimentos vencidos', select(ruleOpts, s.ruleR, function (v) { saveSetting({ ruleR: v }); })),
       field('Pagamentos vencidos', select(ruleOptsP, s.ruleP, function (v) { saveSetting({ ruleP: v }); })),
@@ -568,6 +609,10 @@
     clear(box);
     var p = plan;
     if (!st.startValid) box.appendChild(h('p', { class: 'tr-err', text: 'Data de início inválida; a usar ' + fmtD(st.ref) + '.' }));
+    var per = p.vista === 'Mensal' ? 'meses' : p.vista === 'Diária' ? 'dias' : 'semanas';
+    box.appendChild(h('p', { class: 'tr-note', text: 'Projeção de ' + fmtD(p.start) + ' a ' + fmtD(p.end) + ': ' + p.periods.length + ' ' + per + ', vista ' + p.vista.toLowerCase() + '.' +
+      (p.fimErr ? ' Data final inválida ou anterior ao início: a usar a do horizonte.' : '') +
+      (p.vista === 'Diária' && p.periods.length >= 400 ? ' A vista diária limita-se a 400 dias.' : '') }));
     box.appendChild(h('p', { class: 'tr-note', text: 'Vencidos tratados pelas regras acima: ' + eur(p.ovR) + ' de recebimentos e ' + eur(p.ovP) + ' de pagamentos (líquidos). ' +
       (p.vencFora > 0 ? p.vencFora + ' vencidos (' + eur(p.vencForaV) + ') ficam fora do plano. ' : '') +
       (p.fora > 0 ? p.fora + ' documentos (' + eur(p.foraV) + ') vencem depois do horizonte. ' : '') +
@@ -698,11 +743,11 @@
       h('div', { class: 'tr-chart' }, h('h5', { text: 'Saldo final' }), lineChart(col('close'), labels)),
       h('div', { class: 'tr-chart' }, h('h5', { text: 'Recebimentos e pagamentos' }), colChart(labels, [{ name: 'Recebimentos', values: col('rec'), color: '#00a65a' }, { name: 'Pagamentos', values: col('pag'), color: '#dd4b39' }]),
         h('div', { class: 'tr-legend' }, h('span', {}, h('i', { style: 'background:#00a65a' }), 'Recebimentos'), h('span', {}, h('i', { style: 'background:#dd4b39' }), 'Pagamentos')))));
-    box.appendChild(h('div', { class: 'tr-controls' }, segmented(['Saldo final', 'Recebimentos', 'Pagamentos', 'Líquido'].map(function (m) { return { value: m, label: m }; }), ui.medida, function (v) { ui.medida = v; renderProjection(); })));
+    box.appendChild(h('div', { class: 'tr-controls' }, segmented(['Saldo final', 'Recebimentos', 'Pagamentos', 'Líquido', 'CCC utilizada', 'Utilização CCC', 'Reposição CCC'].map(function (m) { return { value: m, label: m }; }), ui.medida, function (v) { ui.medida = v; renderProjection(); })));
     var vis = res.filter(function (r) { return r.visivel; });
-    var valOf = function (r, i) { return ui.medida === 'Saldo final' ? r.close[i] : ui.medida === 'Recebimentos' ? r.rec[i] : ui.medida === 'Pagamentos' ? r.pag[i] : r.rec[i] - r.pag[i]; };
+    var valOf = function (r, i) { return ui.medida === 'Saldo final' ? r.close[i] : ui.medida === 'Recebimentos' ? r.rec[i] : ui.medida === 'Pagamentos' ? r.pag[i] : ui.medida === 'CCC utilizada' ? r.usedEnd[i] : ui.medida === 'Utilização CCC' ? r.cu[i] : ui.medida === 'Reposição CCC' ? r.cr[i] : r.rec[i] - r.pag[i]; };
     var rows = per.map(function (p, i) {
-      var alert = res.filter(function (r) { return r.close[i] + r.lim < 0; }).map(function (r) { return r.nome; });
+      var alert = res.filter(function (r) { return r.shortP[i] > 0; }).map(function (r) { return r.nome; });
       return [p.label].concat(vis.map(function (r) { return eur(valOf(r, i)); }), [eur(sum(res.map(function (r) { return valOf(r, i); }))), alert.length ? badge('danger', alert.join(', ')) : '']);
     });
     if (ui.medida === 'Saldo final') {
@@ -794,7 +839,7 @@
         if (it.overridden) acts.push(btn('Repor', 'btn-default', function () { req('DELETE', '/api/treasury/overrides/' + encodeURIComponent(it.id)).then(function () { return refreshAll(); }); }));
       }
     }
-    return [it.recorrente ? '↻ ' + it.tdoc : it.tdoc, it.doc || '—', it.parte || '—', fmtD(it.venc) + ' · ' + prazoTxt(it.prazoDias), it.semanaIso || '—', it.dataPlan ? fmtD(it.dataPlan) + ' (alterada)' : '—', it.dataPlan ? it.semanaIsoPlan : '—',
+    return [it.recorrente ? '↻ ' + it.tdoc : it.tdoc, it.doc || '—', it.parte || '—', fmtD(it.venc) + ' · ' + prazoTxt(it.prazoDias), it.semanaIso || '—', it.dataPlan ? fmtD(it.dataPlan) + ' (alterada)' : it.dataPag ? fmtD(it.dataPag) + ' (pagamento)' : '—', it.dataPlan ? it.semanaIsoPlan : '—',
       eur(it.valor), it.liquido !== null ? eur(it.liquido) : '—', banco, it.recorrente ? h('strong', { text: '↻ ' + notaOf(it) }) : notaOf(it), h('div', { class: 'tr-actions' }, acts)];
   }
 
@@ -827,13 +872,13 @@
     var K = ui.ioKind;
     var texts = {
       documents: 'Formato: tipo;tipo_doc;documento;codigo;entidade;vencimento;valor;banco;data_planeada;origem;estado. Tipo Recebimento ou Pagamento, datas DD/MM/AAAA, valores 1234,56 com sinal (negativo = crédito). O banco só preenche o documento; o banco da entidade vem de Bancos por entidade. As duas últimas colunas (semana ISO) são calculadas e ignoradas na importação. As linhas importadas passam a ser entradas manuais (os documentos do Sage vêm só do ficheiro Sage). Aceita colagem do Excel.',
-      plan: 'Só exportação. Colunas: banco;banco_origem;documento;fornecedor;vencimento;semana_iso_venc;data_prevista;semana_iso_prevista;valor;saldo_apos;nota, uma linha por pagamento, ordenada por banco e data prevista. banco_origem indica se o banco é sugerido, do documento, do fornecedor ou por defeito.',
+      plan: 'Só exportação. Colunas: banco;tipo_linha;banco_origem;fornecedor;semana_iso;data_pagamento;semana_iso_pagamento;n_faturas;valor;utilizacao_ccc;reposicao_ccc;saldo_ordem_apos;ccc_utilizada_apos;documentos;vencimento_mais_antigo;nota. Uma linha por pagamento (um grupo fornecedor e semana ISO é uma linha, com os documentos separados por |), ordenada por banco e data de pagamento, mais uma linha Reposição CCC por cada reposição. utilizacao_ccc é a CCC utilizada para esse pagamento; semana_iso é a semana do grupo.',
       recurring: 'Formato: descricao;categoria;tipo;valor;banco;frequencia;dia;inicio;fim;fim_de_semana;ativo. Categoria: Renda, Salários, Impostos/IVA/IRC/Seg. Social, Seguros ou Outros. Tipo Recebimento ou Pagamento, valor positivo. Frequência Semanal, Mensal, Trimestral ou Anual. Dia: dia da semana (segunda a domingo) se semanal, senão dia do mês (1 a 31; nos meses mais curtos vale o último dia). Datas DD/MM/AAAA, fim opcional. Fim de semana: Manter, Adiantar ou Adiar. Ativo: sim ou não.',
-      balances: 'Formato: banco;saldo;ccc_disponivel. "Substituir tudo" remove os bancos que não estiverem na lista.',
+      balances: 'Formato: banco;saldo;ccc_disponivel;saldo_minimo (saldo_minimo é opcional; por defeito 5.000,00). "Substituir tudo" remove os bancos que não estiverem na lista.',
       entities: 'Formato: codigo;entidade;banco. O código é C ou F seguido do código Sage (por exemplo F1010). Banco em branco remove a atribuição.' };
     var ph = { documents: 'Pagamento;FFO;FFOE012611/00001;F1010;Fornecedor Exemplo, Lda.;30/11/2026;1500,00;Banco Exemplo A;;Manual;',
       recurring: 'Renda do armazém;Renda;Pagamento;2500,00;Banco Exemplo A;Mensal;1;01/11/2026;;Adiar para dia útil;sim',
-      balances: 'Banco Exemplo A;25000,00;50000,00', entities: 'F1010;Fornecedor Exemplo, Lda.;Banco Exemplo A', plan: '' };
+      balances: 'Banco Exemplo A;25000,00;50000,00;5000,00', entities: 'F1010;Fornecedor Exemplo, Lda.;Banco Exemplo A', plan: '' };
     var exp = h('textarea', { readonly: true, 'aria-label': 'Exportação' });
     var imp = h('textarea', { placeholder: ph[K], 'aria-label': 'Importação', disabled: K === 'plan' });
     var out = h('div', {});
@@ -930,9 +975,12 @@
       ['Vencimento', 'Usa Data venc. O prazo é a data de início menos Data venc.; antes do início é vencido, e a regra escolhida (no início, mais dias ou fora do plano) vale para clientes e fornecedores em separado. Uma data planeada manual prevalece.'],
       ['Pendentes de aprovação', 'Os ' + st.counts.pendentes + ' documentos de fornecedores com estado Pendente Aprovação entram por defeito e podem ser retirados.' + (st.counts.usd ? ' ' + st.counts.usd + ' documento(s) em divisa diferente de EUR contam como euros, sem conversão.' : '')],
       ['Fora do Sage', 'Financiamentos, encargos, salários e prestações que não estão no Sage são entradas manuais com banco e data próprios (origem Fora do Sage). Podem ser retirados em Incluir pagamentos fora do Sage.'],
-      ['Banco sugerido para pagamentos', 'Seletor Banco dos pagamentos a fornecedores, no Plano de pagamentos por banco. Sugerido (por defeito): cada pagamento a fornecedor, manual ou recorrente sem banco é atribuído a um banco pelo algoritmo abaixo; Fixo: usa o banco de pagamento por defeito dos parâmetros; Manual: só contam os bancos atribuídos a documentos ou fornecedores e o resto fica em Sem banco atribuído. Os itens Fora do Sage têm banco próprio e ficam como estão, e um banco atribuído a um documento ou a um fornecedor, ou o banco de pagamento por defeito se estiver escolhido, prevalece sempre sobre a sugestão. Algoritmo: 1) fixam-se primeiro os recebimentos de cada banco e os pagamentos que já têm banco; 2) os pagamentos por sugerir são ordenados por vencidos primeiro, depois pela data prevista, depois pelo valor decrescente e, em caso de empate, pelo identificador do documento, por isso o resultado é sempre o mesmo; 3) para cada um calcula-se, em cada banco, a folga depois do pagamento: o menor saldo diário projetado desde a data do pagamento até ao fim do horizonte, já com os recebimentos futuros desse banco e os pagamentos já atribuídos, menos o valor, mais a CCC se Contar CCC como fundos disponíveis estiver ligado; 4) cabem os bancos com folga igual ou superior a zero, e entre eles escolhe-se pelo critério: maior folga (por defeito), ordem de prioridade (configurável com Subir e Descer), minimizar o uso de CCC (maior folga sem contar a CCC) ou minimizar transferências (ajuste justo: o banco com a menor folga que ainda cabe, que deixa os bancos com mais folga para pagamentos maiores); 5) se nenhum banco cabe, escolhe-se o banco com menos falta e o pagamento fica assinalado como precisando de transferência ou CCC; 6) créditos de fornecedores (valor negativo) vão para o banco ativo (com saldo ou movimentos) com menos folga. O pagamento sugerido aparece a itálico, com a folga, e Aceitar sugestão converte-o em atribuição manual por fornecedor (o banco que recebe a maior parte dos seus pagamentos) ou por documento. O plano por banco pode ser exportado em Importar e exportar, modo Plano por banco.'],
+      ['Data final e vista mensal', 'Nos parâmetros há a Data de início e a Data final. Se a Data final estiver vazia, o fim da projeção é o do Horizonte em semanas (fim da última semana ISO, a contar da segunda-feira da semana de início; na vista diária, 7 dias por semana até 12 semanas). Escolher a Data final atualiza o Horizonte (semanas, arredondado para cima) e escolher o Horizonte limpa a Data final. A data final tem de ser igual ou posterior à de início, senão usa-se a do horizonte; a vista diária limita-se a 400 dias. Documentos com data de pagamento depois da Data final ficam fora do plano. A vista Semanal usa semanas ISO (segunda a domingo), a Mensal usa meses civis (a primeira coluna é o mês da data de início e a última o mês da data final; os vencidos entram na primeira) e a Diária um dia por coluna. Os totais por banco e o plano detalhado são iguais nas três vistas, só muda o agrupamento por período; o Plano por banco, a Projeção, o Dashboard, os gráficos e as sugestões usam a vista escolhida.'],
+      ['Pagamentos agrupados e à sexta-feira', 'Ligado por defeito (parâmetro Agrupar por fornecedor e semana e pagar à sexta-feira). 1) Só entram nos grupos os pagamentos a fornecedores do Sage X3 (incluindo contas de cliente compensadas) e os manuais, sem data planeada alterada; pagamentos fora do Sage, movimentos recorrentes e documentos com data planeada alterada mantêm a sua própria data e não são agrupados. 2) Chave do grupo: fornecedor (código Sage ou nome), semana ISO da data planeada do documento (vencidos: a data de início mais a regra de Pagamentos vencidos) e banco já atribuído ao documento (ou sem banco). 3) O valor do grupo é a soma dos valores líquidos da compensação, com os créditos compensados dentro do grupo; um grupo que soma zero desaparece. 4) Dia de pagamento (por defeito sexta-feira, configurável de segunda a sexta). Regra por defeito: o dia de pagamento mais recente igual ou anterior à data planeada do documento mais antigo do grupo; se for anterior à data de início, o primeiro dia de pagamento igual ou posterior ao início (pode ficar depois do vencimento); se o grupo tiver documentos vencidos, o primeiro dia de pagamento igual ou posterior à data de início. Regra alternativa: o dia de pagamento da semana ISO do vencimento mais antigo (nunca antes do início). 5) O grupo é uma só linha no plano por banco, com o número de faturas, e pode ser expandido com Mostrar as faturas de cada grupo. Um grupo de uma só fatura aparece como a própria fatura, na data de pagamento. 6) Desligar o parâmetro volta a pagar cada fatura na sua data.'],
+      ['CCC e saldo mínimo da conta à ordem', 'Cada banco tem um saldo mínimo da conta à ordem (por defeito 5.000,00 €, editável por banco em Saldos bancários) e um limite de CCC. Simulação diária por banco, a partir do saldo inicial: no mesmo dia entram primeiro os recebimentos e os créditos e depois os pagamentos, do maior para o menor. Utilização: se um pagamento deixar o saldo da conta à ordem abaixo do mínimo e Usar CCC quando falta saldo estiver ligado, utiliza-se a CCC no valor em falta arredondado para cima ao múltiplo de 5.000 € (parâmetro Múltiplo de utilização da CCC), até ao limite ainda livre (o último levantamento pode ser inferior ao múltiplo). A utilização aparece como movimento próprio, com a CCC utilizada acumulada. Reposição: no fim de cada dia com movimentos, se Repor a CCC quando há saldo disponível estiver ligado e o saldo ficar acima do mínimo, repõe-se a CCC utilizada em múltiplos de 5.000 € até ao saldo acima do mínimo e até ao total utilizado (se a CCC utilizada for inferior ao múltiplo, repõe-se o que falta quando o excedente o cobrir); a reposição aparece como movimento próprio e liberta a CCC. Nunca se planeia um pagamento que deixe o saldo abaixo do mínimo se ainda houver CCC livre; o que não for coberto com a CCC é falta de fundos (valor em falta até ao mínimo). Um banco sem pagamentos não tem falta, mesmo que o saldo inicial seja inferior ao mínimo. O Sem banco atribuído não tem mínimo nem CCC. Saldo à ordem, CCC utilizada e CCC disponível por banco estão nas tabelas do Plano de pagamentos por banco e da Projeção; o Dashboard mostra a CCC utilizada no fim, o pico, as utilizações e as reposições.'],
+      ['Banco sugerido para pagamentos', 'Seletor Banco dos pagamentos a fornecedores, no Plano de pagamentos por banco. Sugerido (por defeito): cada pagamento a fornecedor, manual ou recorrente sem banco é atribuído a um banco pelo algoritmo abaixo; Fixo: usa o banco de pagamento por defeito dos parâmetros; Manual: só contam os bancos atribuídos a documentos ou fornecedores e o resto fica em Sem banco atribuído. Os itens Fora do Sage têm banco próprio e ficam como estão, e um banco atribuído a um documento ou a um fornecedor, ou o banco de pagamento por defeito se estiver escolhido, prevalece sempre sobre a sugestão. Algoritmo: 1) fixam-se primeiro os recebimentos de cada banco e os pagamentos que já têm banco; 2) os pagamentos por sugerir (os grupos por fornecedor e semana, se o agrupamento estiver ligado) são ordenados por vencidos primeiro, depois pela data prevista, depois pelo valor decrescente e, em caso de empate, pelo identificador do documento, por isso o resultado é sempre o mesmo; 3) para cada um calcula-se, em cada banco, a folga depois do pagamento: o menor saldo diário projetado desde a data do pagamento até ao fim do horizonte, já com os recebimentos futuros desse banco e os pagamentos já atribuídos, menos o valor, menos o saldo mínimo da conta à ordem do banco e mais o limite da CCC se Usar CCC quando falta saldo estiver ligado; os bancos que cobrem o pagamento sem CCC têm sempre prioridade sobre os que precisam dela; 4) cabem os bancos com folga igual ou superior a zero, e entre eles escolhe-se pelo critério: maior folga (por defeito), ordem de prioridade (configurável com Subir e Descer), minimizar o uso de CCC (maior folga sem contar a CCC) ou minimizar transferências (ajuste justo: o banco com a menor folga que ainda cabe, que deixa os bancos com mais folga para pagamentos maiores); 5) se nenhum banco cabe, escolhe-se o banco com menos falta e o pagamento fica assinalado como precisando de transferência ou CCC; 6) créditos de fornecedores (valor negativo) vão para o banco ativo (com saldo ou movimentos) com menos folga. O pagamento sugerido aparece a itálico, com a folga, e Aceitar sugestão converte-o em atribuição manual por fornecedor (o banco que recebe a maior parte dos seus pagamentos) ou por documento. O plano por banco pode ser exportado em Importar e exportar, modo Plano por banco.'],
       ['Banco dos clientes e dos fornecedores', 'A relação cliente-banco vem do ficheiro clientes_bancos.xlsx (folha Export Worksheet), guardado na pasta privada do servidor e substituível em Ficheiros de origem: BPCNUM_0 é o código do cliente e corresponde a Terc. do Sage, BPCNAM_0 o nome, PAYBAN_0 o código do banco e DES_0 o nome do banco. A linha com BPCNUM 0 é a própria empresa e não entra. A correspondência é por código como texto, sem zeros à esquerda. Bancos: Novo Banco, Millennium BCP (BCP), Banco Santander Totta (Santander), Caixa Geral de Depósitos (CGD) e, novos na página, Bank Millennium Polska EUR e PLN (saldo e CCC a 0; os valores contam em euros, sem conversão da divisa PLN). Só os clientes têm banco: o banco carregado fica em Banco por entidade e pode ser alterado, e um banco escolhido num documento prevalece. Os clientes sem banco no ficheiro ficam em Sem banco atribuído e estão listados em Banco por entidade; usam o banco de recebimento por defeito, se o escolher. Os fornecedores não têm banco: o banco dos pagamentos é sugerido pela página (ver Banco sugerido para pagamentos), fixo no banco de pagamento por defeito, ou manual; um banco atribuído a um fornecedor ou a um documento prevalece. Uma entidade dos dois lados tratada como fornecedor paga-se pelo banco de pagamento dos fornecedores; tratada como cliente, a conta de cliente usa o banco do ficheiro. Importação e exportação Bancos por entidade mantêm-se; Repor bancos dos clientes volta a carregar o ficheiro.'],
-      ['Saldos e CCC', 'Saldos de abertura e limites CCC são introduzidos manualmente em Saldos bancários e parâmetros (ou importados em modo Saldos).'],
+      ['Saldos e CCC', 'Saldos de abertura, limites CCC e saldos mínimos da conta à ordem (por defeito 5.000,00 € por banco) são introduzidos manualmente em Saldos bancários e parâmetros (ou importados em modo Saldos).'],
       ['Movimentos recorrentes', 'Introduzidos à mão na secção Movimentos recorrentes (ou importados em modo Recorrentes; não vêm do Sage). Cada um tem descrição, categoria (Renda, Salários, Impostos/IVA/IRC/Seg. Social, Seguros, Outros), tipo, valor positivo, banco, frequência (semanal, mensal, trimestral, anual), dia, data de início e data de fim opcional. A página gera as ocorrências desde a data de início do plano até ao fim do horizonte; não gera ocorrências anteriores à data de início do plano, por isso nunca são vencidos. Mensal repete todos os meses; trimestral e anual repetem a cada 3 ou 12 meses a partir do mês da data de início; num mês sem o dia escolhido usa-se o último dia do mês. A regra de fim de semana (manter, adiantar ou adiar para dia útil) é aplicada à data de cada ocorrência. Cada ocorrência é um documento de origem Recorrente, marcado com ↻, com a sua semana ISO, que entra na projeção, no plano por banco, no dashboard (saldos, recebimentos e pagamentos por semana, saldo mínimo) e nas sugestões; fica de fora das listas de vencidos, do aging, dos prazos médios e dos dez maiores clientes e fornecedores, que descrevem documentos em aberto, e não é proposto para mudar de banco. Cada movimento liga-se e desliga-se à parte, e todos com Incluir movimentos recorrentes. Sem banco, usa o banco por defeito. Têm importação e exportação próprias (modo Recorrentes); a exportação de Documentos não os inclui.'],
       ['Colunas do ficheiro Sage', 'Terc., Nome, Tipo, Documento, Doc. Origem, Data Doc., Data venc., Colect., Nº Dias, Valor, Valor a pagar, Valor Pago, Status e Divisa. Usadas: Terc. e Nome (entidade), Tipo e Documento (documento), Data venc. (prazo e semana ISO), Colect. (cliente ou fornecedor), Valor a pagar (montante), Status (pendente de aprovação) e Divisa (USD). Não entram no cálculo: Doc. Origem e Data Doc. (informativas), Valor e Valor Pago (Valor a pagar já é o saldo) e Nº Dias (recalculado a partir da data de início).'],
       ['Coluna trabalhada: semana ISO', 'Calculada a partir de Data venc.: semana ISO 8601 com o ano ISO, por exemplo 2026-W44, com as semanas a começar à segunda-feira (a semana 1 é a que contém a 1.ª quinta-feira do ano, pelo que o ano ISO pode diferir do civil: 31/12/2026 e 01/01/2027 caem em 2026-W53). Aparece nas tabelas de recebimentos e pagamentos ao lado do vencimento e, quando há data planeada manual, na sua própria coluna. A projeção, o plano por banco, o dashboard e as sugestões agrupam por semana ISO, com o rótulo S44 2026 (26/10–01/11). O horizonte começa na semana ISO da data de início, cuja 1.ª semana pode ser parcial. Os vencidos caem na semana ISO da data de início, ou na semana da data que a regra escolhida lhes der. A data planeada manual prevalece. Não existe no Sage nem é gravada: é recalculada sempre.']

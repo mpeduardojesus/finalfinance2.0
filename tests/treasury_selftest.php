@@ -30,14 +30,14 @@ $check(Util::isoOf(Util::mondayOf(Util::dayNum('2026-10-28'))) === '2026-10-26',
 
 // ---------------------------------------------------------------- motor (Engine::compute)
 const REF = '2026-10-26';
-$S0 = ['inicio' => '', 'horiz' => '4', 'vista' => 'Semanal', 'useCCC' => false, 'netting' => true, 'incPend' => true, 'incOut' => true, 'incRec' => true,
+$S0 = ['inicio' => '', 'horiz' => '4', 'vista' => 'Semanal', 'fim' => '', 'agrup' => false, 'diaPag' => '4', 'regraDia' => 'ant', 'repor' => true, 'passo' => '5000', 'useCCC' => false, 'netting' => true, 'incPend' => true, 'incOut' => true, 'incRec' => true,
     'ruleR' => '0', 'ruleP' => '0', 'defBankR' => '', 'defBankP' => '', 'modoP' => 'Manual', 'crit' => 'Maior folga'];
 $comp = fn (array $items, array $banks, array $s = [], array $extra = []) => Engine::compute(['items' => $items, 'banks' => $banks, 's' => $s + $S0, 'ref' => REF] + $extra);
 $mk = fn (string $id, string $tipo, string $venc, float $v, string $banco = 'b1', string $party = '') => [
     'id' => $id, 'tipo' => $tipo, 'tdoc' => 'T', 'doc' => $id, 'parte' => 'X', 'party' => $party !== '' ? $party : ($tipo === 'R' ? 'C9' : 'F1'),
     'venc' => $venc, 'valor' => $v, 'banco' => $banco, 'dataPlan' => '', 'origem' => 'Sage X3', 'flag' => '',
 ];
-$bank = fn (string $id, float $saldo = 0.0, float $ccc = 0.0) => ['id' => $id, 'nome' => strtoupper($id), 'saldo' => $saldo, 'ccc' => $ccc];
+$bank = fn (string $id, float $saldo = 0.0, float $ccc = 0.0, float $minimo = 0.0) => ['id' => $id, 'nome' => strtoupper($id), 'saldo' => $saldo, 'ccc' => $ccc, 'minimo' => $minimo];
 $banks = [$bank('b1', 10.0, 100.0)];
 $byId = function (array $p, string $id): array {
     foreach ($p['res'] as $r) {
@@ -213,6 +213,150 @@ $check(abs($byId($pp, 'b1')['pag'][2] - 50) < 0.001, 'data planeada 13/01 → 20
 // vista diária mantém-se (1 coluna por dia)
 $pd = $comp($its, [$bank('b1', 10.0, 100.0)], ['inicio' => '2026-12-30', 'horiz' => '4', 'vista' => 'Diária']);
 $check(count($pd['periods']) === 28 && $pd['periods'][0]['start'] === '2026-12-30', 'vista diária: 28 dias a partir da data de início');
+
+
+// ================================================================ v5: agrupamento, sexta-feira, CCC, saldo mínimo, data final, vista mensal
+$d = fn (string $iso): int => Util::dayNum($iso);
+$check(Util::lastPayday($d('2026-11-04'), 4) === $d('2026-10-30'), 'último dia de pagamento (sexta) ≤ quarta 04/11 = 30/10');
+$check(Util::lastPayday($d('2026-10-30'), 4) === $d('2026-10-30'), 'se o dia já é sexta, mantém-se');
+$check(Util::firstPayday($d('2026-10-28'), 4) === $d('2026-10-30'), 'primeiro dia de pagamento (sexta) ≥ quarta 28/10 = 30/10');
+$check(Util::payDateOf($d('2026-11-04'), false, $d('2026-10-26'), 4, 'ant') === $d('2026-10-30'), 'regra ant: vencimento 04/11 → sexta anterior 30/10');
+$check(Util::payDateOf($d('2026-11-04'), false, $d('2026-10-26'), 4, 'sem') === $d('2026-11-06'), 'regra sem: sexta da semana ISO do vencimento = 06/11');
+$check(Util::payDateOf($d('2026-10-27'), false, $d('2026-10-26'), 4, 'ant') === $d('2026-10-30'), 'sexta anterior antes do início → primeira sexta a partir do início');
+$check(Util::payDateOf($d('2026-10-20'), true, $d('2026-10-28'), 4, 'ant') === $d('2026-10-30'), 'vencido: primeira sexta a partir do início');
+$check(Util::monthIdx($d('2026-12-31')) === 2026 * 12 + 11 && Util::monthIdx($d('2027-01-01')) === 2027 * 12, 'índice do mês');
+
+$G = ['agrup' => true, 'horiz' => '6'];
+$mg = fn (string $id, string $venc, float $v, string $party = 'F1', string $banco = 'b1') => $mk($id, 'P', $venc, $v, $banco, $party);
+$items = [$mg('g1', '2026-11-03', 100.0), $mg('g2', '2026-11-05', 50.0), $mg('g3', '2026-11-12', 10.0), $mg('h1', '2026-11-04', 70.0, 'F2')];
+$p = $comp($items, [$bank('b1', 1000.0)], $G);
+$r = $byId($p, 'b1');
+$check($p['grpN'] === 3 && $p['grpDocs'] === 4, 'agrupar: 4 faturas em 3 pagamentos (fornecedor + semana ISO) (obtido ' . $p['grpN'] . '/' . $p['grpDocs'] . ')');
+$ev = array_values(array_filter($r['list'], fn ($e) => isset($e['mem'])));
+$check(count($ev) === 1 && abs($ev[0]['v'] - 150.0) < 0.001 && count($ev[0]['mem']) === 2 && $ev[0]['n'] === $d('2026-10-30'), 'F1 na semana 45 (03 e 05/11): um pagamento de 150 na sexta anterior (30/10)');
+$check($p['payMap']['g1']['n'] === $d('2026-10-30') && $p['payMap']['g3']['n'] === $d('2026-11-06') && $p['payMap']['h1']['n'] === $d('2026-10-30'), 'payMap: 30/10, 06/11 e 30/10');
+$check(abs($r['pagT'] - 230.0) < 0.001, 'agrupar não altera o total pago (230)');
+$single = array_values(array_filter($r['list'], fn ($e) => $e['item']['id'] === 'g3'));
+$check(count($single) === 1 && !isset($single[0]['mem']), 'um grupo de uma fatura aparece como a própria fatura');
+$pr = $comp($items, [$bank('b1', 1000.0)], $G + ['regraDia' => 'sem']);
+$check($pr['payMap']['g1']['n'] === $d('2026-11-06') && $pr['payMap']['g3']['n'] === $d('2026-11-13'), 'regra sem: sexta da semana ISO do vencimento (06/11 e 13/11)');
+$p2 = $comp($items, [$bank('b1', 1000.0)], $G + ['diaPag' => '2']);
+$check($p2['payMap']['g1']['n'] === $d('2026-10-28'), 'dia de pagamento quarta-feira: 28/10');
+$p3 = $comp($items, [$bank('b1', 1000.0)], ['agrup' => false, 'horiz' => '6']);
+$check($p3['grpN'] === 0 && count($byId($p3, 'b1')['list']) === 4, 'sem agrupar: cada fatura na sua data');
+// vencidos: primeira sexta a partir do início; data planeada, fora do Sage e recorrentes não se agrupam
+$ov = [$mg('o1', '2026-10-01', 40.0), $mg('o2', '2026-10-10', 60.0)];
+$po = $comp($ov, [$bank('b1', 1000.0)], $G + ['inicio' => '2026-10-28']);
+$check($po['grpN'] === 1 && $po['payMap']['o1']['n'] === $d('2026-10-30') && abs(array_sum(array_column($byId($po, 'b1')['list'], 'v')) - 100.0) < 0.001, 'vencidos agrupam-se na primeira sexta a partir do início (30/10)');
+$pl = $mg('pl', '2026-11-03', 20.0);
+$pl['dataPlan'] = '2026-11-03';
+$fo = $mg('fo', '2026-11-03', 30.0);
+$fo['origem'] = 'Fora do Sage';
+$pn = $comp([$pl, $fo, $mg('n1', '2026-11-03', 5.0), $mg('n2', '2026-11-04', 6.0)], [$bank('b1', 1000.0)], $G);
+$check($pn['grpN'] === 1 && $pn['grpDocs'] === 2 && count($byId($pn, 'b1')['list']) === 3, 'data planeada e Fora do Sage não se agrupam');
+// créditos compensados dentro do grupo (sem compensação por entidade) e grupo a zero
+$pc = $comp([$mg('c1', '2026-11-03', 100.0), $mg('c2', '2026-11-04', -100.0)], [$bank('b1', 1000.0)], $G + ['netting' => false]);
+$check($pc['grpN'] === 0 && $pc['compens'] === 2, 'grupo que soma zero desaparece');
+// grupo com data de pagamento depois da data final fica fora
+$pf = $comp([$mg('f1', '2026-11-12', 10.0)], [$bank('b1', 1000.0)], $G + ['fim' => '2026-11-10']);
+$check($pf['fora'] === 1 && $byId($pf, 'b1')['pagT'] == 0.0, 'pagamento depois da data final fica fora do plano');
+
+// CCC: múltiplos de 5.000, limite livre e reposição
+$bk = fn (float $s, float $c, float $m = 5000.0) => [$bank('b1', $s, $c, $m)];
+$pay12 = [$mk('x', 'P', '2026-10-30', 12000.0)];
+$p = $comp($pay12, $bk(0.0, 30000.0), ['useCCC' => true]);
+$r = $byId($p, 'b1');
+$check(abs($r['cuT'] - 20000.0) < 0.001 && $r['cuN'] === 1 && abs($r['list'][0]['saldo'] - 8000.0) < 0.001 && $r['need'] == 0.0, 'CCC: falta 17.000 até ao mínimo → utiliza 20.000 (múltiplo de 5.000); saldo após 8.000');
+$check(abs($r['usedFim'] - 20000.0) < 0.001 && abs($r['usedMax'] - 20000.0) < 0.001 && abs($r['cu'][0] - 20000.0) < 0.001, 'CCC utilizada no fim e pico = 20.000');
+$p = $comp($pay12, $bk(0.0, 10000.0), ['useCCC' => true]);
+$r = $byId($p, 'b1');
+$check(abs($r['cuT'] - 10000.0) < 0.001 && abs($r['need'] - 7000.0) < 0.001 && $r['first'] === $d('2026-10-30'), 'CCC limitada ao livre (10.000): faltam 7.000 até ao mínimo');
+$p = $comp($pay12, $bk(0.0, 30000.0), ['useCCC' => false]);
+$r = $byId($p, 'b1');
+$check($r['cuN'] === 0 && abs($r['need'] - 17000.0) < 0.001 && abs($r['min'] + 12000.0) < 0.001, 'CCC desligada: falta de 17.000 (mínimo 5.000, saldo −12.000)');
+$p = $comp($pay12, $bk(0.0, 30000.0), ['useCCC' => true, 'passo' => '1000']);
+$check(abs($byId($p, 'b1')['cuT'] - 17000.0) < 0.001, 'múltiplo 1.000: utiliza 17.000');
+$p = $comp($pay12, $bk(0.0, 30000.0), ['useCCC' => true, 'passo' => 'abc']);
+$check($p['step'] === 5000.0 && abs($byId($p, 'b1')['cuT'] - 20000.0) < 0.001, 'múltiplo inválido: usa 5.000');
+$rep = array_merge($pay12, [$mk('rc', 'R', '2026-11-03', 25000.0, 'b1', 'C9')]);
+$p = $comp($rep, $bk(0.0, 30000.0), ['useCCC' => true]);
+$r = $byId($p, 'b1');
+$mv = array_values(array_filter($r['seq'], fn ($q) => isset($q['m'])));
+$check(count($mv) === 2 && $mv[0]['m']['k'] === 'U' && $mv[1]['m']['k'] === 'R' && abs($mv[1]['m']['v'] - 20000.0) < 0.001 && $mv[1]['n'] === $d('2026-11-03'), 'reposição de 20.000 no dia do recebimento (saldo acima do mínimo)');
+$check(abs($r['usedFim']) < 0.001 && abs($r['crT'] - 20000.0) < 0.001 && abs($r['final'] - 13000.0) < 0.001 && abs($r['close'][1] - 13000.0) < 0.001, 'CCC volta a zero e o saldo da conta à ordem fica em 13.000 (−12.000 + 25.000)');
+$p = $comp($rep, $bk(0.0, 30000.0), ['useCCC' => true, 'repor' => false]);
+$check($byId($p, 'b1')['crN'] === 0 && abs($byId($p, 'b1')['usedFim'] - 20000.0) < 0.001, 'sem repor: a CCC fica utilizada');
+// reposição parcial: só em múltiplos de 5.000 e só até ao excedente acima do mínimo
+$rep2 = array_merge($pay12, [$mk('rc2', 'R', '2026-11-03', 16000.0, 'b1', 'C9')]);
+$p = $comp($rep2, $bk(0.0, 30000.0), ['useCCC' => true]);
+$r = $byId($p, 'b1');
+// saldo após o pagamento 8.000; com o recebimento 24.000; excedente 19.000 → repõe 15.000 (múltiplo), ficam 5.000 utilizados
+$check(abs($r['crT'] - 15000.0) < 0.001 && abs($r['usedFim'] - 5000.0) < 0.001, 'reposição parcial em múltiplos de 5.000 (15.000; ficam 5.000 por repor)');
+// o pagamento só usa a CCC se houver pagamento: banco sem pagamentos não tem falta
+$p = $comp([$mk('r1', 'R', '2026-10-30', 100.0, 'b1', 'C9')], $bk(1000.0, 0.0), ['useCCC' => true]);
+$check($byId($p, 'b1')['need'] == 0.0 && $byId($p, 'b1')['first'] === null, 'sem pagamentos não há falta, mesmo com saldo inicial abaixo do mínimo');
+// saldo mínimo
+$p = $comp([$mk('m1', 'P', '2026-10-30', 2000.0)], $bk(6000.0, 0.0), ['useCCC' => false]);
+$r = $byId($p, 'b1');
+$check(abs($r['need'] - 1000.0) < 0.001 && $r['first'] === $d('2026-10-30') && abs($r['shortP'][0] - 1000.0) < 0.001, 'saldo mínimo 5.000: 6.000 − 2.000 = 4.000 → falta 1.000');
+$p = $comp([$mk('m1', 'P', '2026-10-30', 2000.0)], $bk(6000.0, 0.0, 0.0), ['useCCC' => false]);
+$check($byId($p, 'b1')['need'] == 0.0, 'saldo mínimo 0 (v4): sem falta');
+$check(Engine::minOf(['minimo' => '']) === 5000.0 && Engine::minOf([]) === 5000.0 && Engine::minOf(['minimo' => 'abc']) === 5000.0 && Engine::minOf(['minimo' => '-10']) === 0.0 && Engine::minOf(['minimo' => '1.234,50']) === 1234.5, 'saldo mínimo: vazio/inválido = 5.000; negativo = 0');
+// banco sugerido respeita o saldo mínimo do banco e usa CCC só quando nenhum cabe sem ela
+$two = [$bank('b1', 6000.0, 0.0, 5000.0), $bank('b2', 10000.0, 0.0, 5000.0)];
+$x = $sg([$mkp('p', '2026-10-30', 2000.0)], $two, ['useCCC' => true]);
+$check($x['sugMap']['p']['bank'] === 'b2' && $x['sugMap']['p']['ok'] && !$x['sugMap']['p']['ccc'], 'sugestão: b1 ficaria abaixo do mínimo; escolhe b2 (folga 3.000)');
+$two = [$bank('b1', 3000.0, 20000.0, 5000.0), $bank('b2', 2000.0, 0.0, 5000.0)];
+$x = $sg([$mkp('p', '2026-10-30', 2000.0)], $two, ['useCCC' => true]);
+$check($x['sugMap']['p']['bank'] === 'b1' && $x['sugMap']['p']['ok'] && $x['sugMap']['p']['ccc'], 'sugestão: só b1 cabe (com CCC) e fica assinalado como usando CCC');
+$x = $sg([$mkp('p', '2026-10-30', 2000.0)], $two, ['useCCC' => false]);
+$check(!$x['sugMap']['p']['ok'], 'sem CCC nenhum banco cobre: assinalado sem fundos');
+// sugestões e dashboard
+$p = $comp($rep, $bk(0.0, 30000.0), ['useCCC' => true]);
+$incl = Engine::inclV($p, ['incPend' => true, 'incOut' => true]);
+$dsh = Engine::dash($p, $incl);
+$check($dsh['cuN'] === 1 && $dsh['crN'] === 1 && abs($dsh['cuT'] - 20000.0) < 0.001 && abs($dsh['usedFim']) < 0.001 && abs($dsh['usedPk'] - 20000.0) < 0.001, 'dashboard: 1 utilização e 1 reposição de 20.000');
+$sgs = Engine::suggestions($p, $dsh, $incl, ['useCCC' => true, 'agrup' => false]);
+$check(count(array_filter($sgs, fn ($x) => str_starts_with($x['t'], 'CCC: 1 utilizações'))) === 1, 'sugestão resumo da CCC');
+$pa = $comp($items, [$bank('b1', 1000.0)], $G);
+$sga = Engine::suggestions($pa, Engine::dash($pa, Engine::inclV($pa, $G)), Engine::inclV($pa, $G), $G);
+$check(count(array_filter($sga, fn ($x) => str_starts_with($x['t'], 'Pagamentos agrupados por fornecedor e semana: 4 faturas em 3 pagamentos'))) === 1, 'sugestão dos pagamentos agrupados');
+
+// data final e vistas
+$pe = $comp([$mg('e1', '2026-12-10', 10.0)], [$bank('b1', 100.0)], ['fim' => '2026-12-18', 'horiz' => '4']);
+$check($pe['endN'] === $d('2026-12-18') && count($pe['periods']) === 8 && !$pe['fimErr'], 'data final 18/12 (semanal): 8 semanas ISO');
+$pe = $comp([], [$bank('b1', 100.0)], ['fim' => '2026-10-01']);
+$check($pe['fimErr'] && $pe['endN'] === $d('2026-10-26') - 0 + 7 * 4 - 1, 'data final anterior ao início: erro e usa a do horizonte');
+$pe = $comp([], [$bank('b1', 100.0)], ['fim' => 'xx']);
+$check($pe['fimErr'], 'data final inválida: erro');
+$pm = $comp([$mk('mm', 'P', '2026-10-30', 10.0), $mk('mn', 'P', '2026-12-30', 20.0), $mk('mo', 'R', '2027-01-05', 5.0, 'b1', 'C9')], [$bank('b1', 100.0)], ['vista' => 'Mensal', 'fim' => '2027-01-31']);
+$check(array_column($pm['periods'], 'label') === ['out 2026', 'nov 2026', 'dez 2026', 'jan 2027'] && array_column($pm['periods'], 'short') === ['out', 'nov', 'dez', 'jan/27'], 'vista mensal: out, nov, dez, jan/27');
+$rm = $byId($pm, 'b1');
+$check(abs($rm['pag'][0] - 10.0) < 0.001 && abs($rm['pag'][2] - 20.0) < 0.001 && abs($rm['rec'][3] - 5.0) < 0.001, 'vista mensal: pagamentos por mês civil');
+$check(abs($rm['close'][3] - (100 - 10 - 20 + 5)) < 0.001, 'vista mensal: saldo final do último mês');
+$pdl = $comp([], [$bank('b1', 100.0)], ['vista' => 'Diária', 'fim' => '2030-01-01']);
+$check(count($pdl['periods']) === 400, 'vista diária limita-se a 400 dias');
+[$ra, $rb2] = Engine::recRange(['inicio' => '2026-10-26', 'horiz' => '4', 'vista' => 'Mensal', 'fim' => '2027-02-28'], REF);
+$check($ra === $d('2026-10-26') && $rb2 === $d('2027-02-28'), 'recorrentes: o intervalo segue a data final');
+// totais iguais nas três vistas
+$tot = [];
+foreach (['Semanal', 'Mensal', 'Diária'] as $vv) {
+    $pv = $comp($items, [$bank('b1', 1000.0)], $G + ['vista' => $vv, 'fim' => '2026-12-06']);
+    $tot[] = round($byId($pv, 'b1')['pagT'], 2) . '|' . round($byId($pv, 'b1')['final'], 2);
+}
+$check(count(array_unique($tot)) === 1, 'totais por banco iguais nas três vistas (' . implode(' / ', $tot) . ')');
+
+// migração do estado antigo (v4): CCC ligada e saldo mínimo 5.000
+$tmp = sys_get_temp_dir() . '/trmig-' . bin2hex(random_bytes(4));
+mkdir($tmp . '/data/private', 0770, true);
+file_put_contents($tmp . '/data/private/treasury-demo.json', json_encode(['version' => 1, 'settings' => ['useCCC' => false, 'horiz' => '8'], 'banks' => [['id' => 'z', 'nome' => 'Z', 'saldo' => 1.0, 'ccc' => 2.0]]]));
+putenv('TREASURY_DATA_DIR=' . $tmp . '/data/private');
+$stg = new \App\Treasury\Storage($tmp);
+$ms = $stg->loadState(true);
+putenv('TREASURY_DATA_DIR');
+$check($ms['settings']['useCCC'] === true && $ms['settings']['repor'] === true && $ms['settings']['agrup'] === true && $ms['settings']['horiz'] === '8' && (float) $ms['banks'][0]['minimo'] === 5000.0 && $ms['version'] === 2, 'migração v4 → v5: CCC ligada, repor, agrupar e saldo mínimo 5.000 por banco');
+array_map('unlink', glob($tmp . '/data/private/*') ?: []);
+@rmdir($tmp . '/data/private'); @rmdir($tmp . '/data'); @rmdir($tmp);
 
 echo $fail === 0 ? "\nTudo OK\n" : "\n$fail falhas\n";
 exit($fail === 0 ? 0 : 1);

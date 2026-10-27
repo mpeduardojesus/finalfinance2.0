@@ -90,6 +90,38 @@ final class Util
         return $n - (($n + 3) % 7);
     }
 
+    /** Índice do mês (ano * 12 + mês - 1) de um número de dia. */
+    public static function monthIdx(int $n): int
+    {
+        $s = self::isoOf($n);
+        return (int) substr($s, 0, 4) * 12 + (int) substr($s, 5, 2) - 1;
+    }
+
+    /** Último dia com o dia da semana $dow (0 = segunda) igual ou anterior a $n. */
+    public static function lastPayday(int $n, int $dow): int
+    {
+        return $n - (((($n + 3) % 7) - $dow + 7) % 7);
+    }
+
+    /** Primeiro dia com o dia da semana $dow igual ou posterior a $n. */
+    public static function firstPayday(int $n, int $dow): int
+    {
+        return $n + ((($dow - (($n + 3) % 7) + 7) % 7));
+    }
+
+    /** Data de pagamento de um grupo fornecedor + semana ISO ($nMin = data planeada do documento mais antigo). */
+    public static function payDateOf(int $nMin, bool $atraso, int $startN, int $dow, string $regra): int
+    {
+        if ($atraso) {
+            return self::firstPayday(max($nMin, $startN), $dow);
+        }
+        $pd = $regra === 'sem' ? self::mondayOf($nMin) + $dow : self::lastPayday($nMin, $dow);
+        if ($pd < $startN) {
+            $pd = self::firstPayday($startN, $dow);
+        }
+        return $pd;
+    }
+
     public static function isoWeek(int $n): int
     {
         $thu = self::mondayOf($n) + 3;

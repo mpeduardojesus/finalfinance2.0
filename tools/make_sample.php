@@ -78,13 +78,13 @@ $cli['importedAt'] = '2026-10-26T00:00:00+00:00';
 file_put_contents($dir . '/clientes-bancos.json', json_encode($cli, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_PRETTY_PRINT));
 
 $state = [
-    'version' => 1,
-    'settings' => ['inicio' => '', 'horiz' => '10', 'vista' => 'Semanal', 'useCCC' => false, 'netting' => true, 'incPend' => true, 'incOut' => true, 'incRec' => true, 'ruleR' => '0', 'ruleP' => '0',
+    'version' => 2,
+    'settings' => ['inicio' => '', 'horiz' => '10', 'vista' => 'Semanal', 'fim' => '', 'agrup' => true, 'diaPag' => '4', 'regraDia' => 'ant', 'useCCC' => true, 'repor' => true, 'passo' => '5000', 'netting' => true, 'incPend' => true, 'incOut' => true, 'incRec' => true, 'ruleR' => '0', 'ruleP' => '0',
         'defBankR' => '', 'defBankP' => '', 'modoP' => 'Sugerido', 'crit' => 'Maior folga'],
     'banks' => [
-        ['id' => 'ba', 'nome' => 'Banco Exemplo A', 'saldo' => 25000.0, 'ccc' => 50000.0],
-        ['id' => 'bb', 'nome' => 'Banco Exemplo B', 'saldo' => 4000.0, 'ccc' => 0.0],
-        ['id' => 'bc', 'nome' => 'Banco Exemplo C', 'saldo' => 0.0, 'ccc' => 0.0],
+        ['id' => 'ba', 'nome' => 'Banco Exemplo A', 'saldo' => 25000.0, 'ccc' => 50000.0, 'minimo' => 5000.0],
+        ['id' => 'bb', 'nome' => 'Banco Exemplo B', 'saldo' => 4000.0, 'ccc' => 0.0, 'minimo' => 5000.0],
+        ['id' => 'bc', 'nome' => 'Banco Exemplo C', 'saldo' => 0.0, 'ccc' => 0.0, 'minimo' => 5000.0],
     ],
     'partyBank' => new stdClass(), // os bancos dos clientes vêm de clientes-bancos.json; os fornecedores não têm banco
     'classOv' => new stdClass(),

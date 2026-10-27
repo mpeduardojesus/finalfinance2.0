@@ -30,6 +30,7 @@ final class TreasuryApi
             (int) ($q->query['period'] ?? -1),
             ($q->query['rec'] ?? '1') !== '0',
             (int) ($q->query['page'] ?? 0),
+            ($q->query['fat'] ?? '0') === '1',
         )));
 
         $r->add('GET', '/api/treasury/dashboard', fn (): Response => new Response(200, $s->dashboard()));

@@ -21,6 +21,7 @@ final class Engine
     public const WDN = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo'];
     public const MODOS = ['Sugerido', 'Fixo', 'Manual'];
     public const CRITS = ['Maior folga', 'Ordem de prioridade', 'Minimizar uso de CCC', 'Minimizar transferências'];
+    public const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
     public const BANDS = ['1–30 dias', '31–90 dias', '91–180 dias', '181–365 dias', 'mais de 365 dias'];
 
     // ------------------------------------------------------------------ utilitários
@@ -51,9 +52,44 @@ final class Engine
         return Util::dayNum(Util::parseDate((string) ($s['inicio'] ?? '')) ?? $ref);
     }
 
-    private static function horiz(array $s): int
+    /**
+     * Fim do horizonte: a data final indicada ou a derivada do horizonte em semanas.
+     * @param array<string,mixed> $s @return array{0:int,1:int,2:bool} início, fim (dias) e se a data final é inválida
+     */
+    public static function calcEnd(array $s, string $ref): array
     {
-        return (int) ($s['horiz'] ?? 10) ?: 10;
+        $startN = self::startOf($s, $ref);
+        $nW = (int) ($s['horiz'] ?? 10) ?: 10;
+        $vista = (string) ($s['vista'] ?? 'Semanal');
+        $endN = $vista === 'Diária' ? $startN + min($nW, 12) * 7 - 1 : Util::mondayOf($startN) + 7 * $nW - 1;
+        $fimErr = false;
+        $fim = trim((string) ($s['fim'] ?? ''));
+        if ($fim !== '') {
+            $p = Util::parseDate($fim);
+            if ($p !== null && Util::dayNum($p) >= $startN) {
+                $endN = Util::dayNum($p);
+            } else {
+                $fimErr = true;
+            }
+        }
+        if ($vista === 'Diária' && $endN > $startN + 399) {
+            $endN = $startN + 399;
+        }
+        if ($endN > $startN + 1830) { // proteção do servidor: no máximo 5 anos
+            $endN = $startN + 1830;
+        }
+        return [$startN, $endN, $fimErr];
+    }
+
+    /** Saldo mínimo da conta à ordem: vazio ou inválido = 5.000 €. @param array<string,mixed> $b */
+    public static function minOf(array $b): float
+    {
+        $t = $b['minimo'] ?? '';
+        if ($t === null || (is_string($t) && trim($t) === '')) {
+            return 5000.0;
+        }
+        $v = Util::parseNum($t);
+        return $v === null ? 5000.0 : max(0.0, (float) $v);
     }
 
     // ------------------------------------------------------------------ entidades nos dois lados
@@ -187,10 +223,7 @@ final class Engine
     /** @return array{0:int,1:int} início e fim (dias) do intervalo coberto pelo horizonte */
     public static function recRange(array $s, string $ref): array
     {
-        $startN = self::startOf($s, $ref);
-        $nW = self::horiz($s);
-        $weekly = ($s['vista'] ?? 'Semanal') === 'Semanal';
-        $endN = $weekly ? Util::mondayOf($startN) + 7 * $nW - 1 : $startN + min($nW, 12) * 7 - 1;
+        [$startN, $endN] = self::calcEnd($s, $ref);
         return [$startN, $endN];
     }
 
@@ -267,11 +300,17 @@ final class Engine
         $defP = (string) ($s['defBankP'] ?? '');
         $modoP = (string) ($s['modoP'] ?? 'Sugerido');
         $crit = (string) ($s['crit'] ?? 'Maior folga');
-        $startN = self::startOf($s, $ref);
-        $nW = self::horiz($s);
-        $weekly = ($s['vista'] ?? 'Semanal') === 'Semanal';
+        [$startN, $endN, $fimErr] = self::calcEnd($s, $ref);
+        $vista = (string) ($s['vista'] ?? 'Semanal');
+        $weekly = $vista === 'Semanal';
+        $monthly = $vista === 'Mensal';
+        $agrup = (bool) ($s['agrup'] ?? true);
+        $diaPag = (string) ($s['diaPag'] ?? '4');
+        $regraDia = (string) ($s['regraDia'] ?? 'ant');
+        $repor = (bool) ($s['repor'] ?? true);
+        $passo = $s['passo'] ?? '5000';
         $netting = (bool) ($s['netting'] ?? true);
-        $useCCC = (bool) ($s['useCCC'] ?? false);
+        $useCCC = (bool) ($s['useCCC'] ?? true);
         $incPend = (bool) ($s['incPend'] ?? true);
         $incOut = (bool) ($s['incOut'] ?? true);
         $ruleR = (string) ($s['ruleR'] ?? '0');
@@ -314,8 +353,7 @@ final class Engine
         $periods = [];
         $wd = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'];
         if ($weekly) {
-            for ($k = 0; $k < $nW; $k++) {
-                $st = $m0 + 7 * $k;
+            for ($st = $m0; $st <= $endN; $st += 7) {
                 $wk = sprintf('%02d', Util::isoWeek($st));
                 $periods[] = [
                     'label' => 'S' . $wk . ' ' . Util::isoYear($st) . ' (' . Util::dm($st) . '–' . Util::dm($st + 6) . ')',
@@ -323,15 +361,29 @@ final class Engine
                     'iso' => Util::isoWeekLabelN($st), 'start' => Util::isoOf($st),
                 ];
             }
+        } elseif ($monthly) {
+            $mi0 = Util::monthIdx($startN);
+            $mi1 = Util::monthIdx($endN);
+            for ($mi = $mi0; $mi <= $mi1; $mi++) {
+                $y = intdiv($mi, 12);
+                $periods[] = [
+                    'label' => self::MESES[$mi % 12] . ' ' . $y,
+                    'short' => self::MESES[$mi % 12] . ($y === intdiv($mi0, 12) ? '' : '/' . substr((string) $y, 2)),
+                    'iso' => '', 'start' => sprintf('%04d-%02d-01', $y, $mi % 12 + 1),
+                ];
+            }
         } else {
-            for ($k = 0; $k < min($nW, 12) * 7; $k++) {
-                $st = $startN + $k;
+            for ($st = $startN; $st <= $endN; $st++) {
                 $periods[] = ['label' => $wd[($st + 3) % 7] . ' ' . Util::dm($st), 'short' => Util::dm($st), 'iso' => Util::isoWeekLabelN($st), 'start' => Util::isoOf($st)];
             }
         }
         $np = count($periods);
-        $idxOf = static function (int $n) use ($weekly, $m0, $startN, $np): int {
-            $i = $weekly ? (int) floor(($n - $m0) / 7) : $n - $startN;
+        $mis = Util::monthIdx($startN);
+        $idxOf = static function (int $n) use ($weekly, $monthly, $m0, $mis, $startN, $np, $endN): int {
+            if ($n > $endN) {
+                return -1;
+            }
+            $i = $weekly ? (int) floor(($n - $m0) / 7) : ($monthly ? Util::monthIdx($n) - $mis : $n - $startN);
             if ($i < 0) {
                 $i = 0;
             }
@@ -391,7 +443,10 @@ final class Engine
         $cols = [];
         foreach ($banks as $b) {
             $nm = trim((string) $b['nome']);
-            $cols[] = ['id' => (string) $b['id'], 'nome' => $nm !== '' ? $nm : '(sem nome)', 'saldo' => (float) $b['saldo'], 'ccc' => (float) $b['ccc']];
+            $cols[] = [
+                'id' => (string) $b['id'], 'nome' => $nm !== '' ? $nm : '(sem nome)', 'saldo' => (float) (Util::parseNum($b['saldo'] ?? null) ?? 0.0),
+                'ccc' => (float) (Util::parseNum($b['ccc'] ?? null) ?? 0.0), 'minimo' => self::minOf($b),
+            ];
         }
         $fora = 0;
         $foraV = 0.0;
@@ -404,10 +459,21 @@ final class Engine
         $evs = [];
         $pend = [];
         $sugMap = [];
+        $grp = [];
+        $payMap = [];
+        $grpN = 0;
+        $grpDocs = 0;
+        $route = static function (array $e, string $b0) use (&$evs, &$pend, $modoP, $cols): void {
+            if ($b0 === '' && $e['item']['tipo'] === 'P' && $modoP === 'Sugerido' && count($cols) > 0) {
+                $pend[] = $e;
+                return;
+            }
+            $evs[$b0 !== '' ? $b0 : self::SEM][] = $e;
+        };
         foreach ($incl as $it) {
             $v = $eff[$it['id']] ?? (float) $it['valor'];
             $d = self::plannedOf($it);
-            if ($d === null || (float) $it['valor'] == 0.0) {
+            if ($d === null || !is_finite((float) $it['valor']) || (float) $it['valor'] == 0.0) {
                 $invalid++;
                 continue;
             }
@@ -444,16 +510,98 @@ final class Engine
                 continue;
             }
             $b0 = $bankOf($it);
-            if ($b0 === '' && $it['tipo'] === 'P' && $modoP === 'Sugerido' && count($cols) > 0) {
-                $pend[] = ['n' => $n, 'atraso' => $atraso, 'p' => $p, 'item' => $it, 'v' => $v, 'saldo' => 0.0];
+            if ($agrup && $it['tipo'] === 'P' && ($it['dataPlan'] ?? '') === '' && !str_starts_with((string) $it['origem'], self::OUT) && !self::isRecIt($it)) {
+                $gk = self::pkOf($it) . '|' . Util::isoYear($n) . '-' . sprintf('%02d', Util::isoWeek($n)) . '|' . $b0;
+                if (!isset($grp[$gk])) {
+                    $grp[$gk] = ['b0' => $b0, 'l' => []];
+                }
+                $grp[$gk]['l'][] = ['it' => $it, 'v' => $v, 'n' => $n, 'atraso' => $atraso];
                 continue;
             }
-            $evs[$b0 !== '' ? $b0 : self::SEM][] = ['n' => $n, 'atraso' => $atraso, 'p' => $p, 'item' => $it, 'v' => $v, 'saldo' => 0.0];
+            $route(['n' => $n, 'atraso' => $atraso, 'p' => $p, 'item' => $it, 'v' => $v, 'saldo' => 0.0, 'due' => $n], $b0);
+        }
+        // pagamentos agrupados por fornecedor e semana ISO, pagos no dia de pagamento (sexta-feira por defeito)
+        $dow = ctype_digit($diaPag) && (int) $diaPag <= 4 ? (int) $diaPag : 4;
+        $gkeys = array_map('strval', array_keys($grp));
+        sort($gkeys, SORT_STRING);
+        foreach ($gkeys as $gk) {
+            $gg = $grp[$gk];
+            $g = $gg['l'];
+            usort($g, static fn ($a, $b) => ($a['n'] <=> $b['n']) ?: strcmp((string) $a['it']['id'], (string) $b['it']['id']));
+            $tot = 0.0;
+            foreach ($g as $x) {
+                $tot += $x['v'];
+            }
+            $atr = false;
+            foreach ($g as $x) {
+                if ($x['atraso']) {
+                    $atr = true;
+                    break;
+                }
+            }
+            $pd = Util::payDateOf($g[0]['n'], $atr, $startN, $dow, $regraDia);
+            if ($pd > $endN) {
+                foreach ($g as $x) {
+                    $fora++;
+                    $foraV += $x['v'];
+                }
+                continue;
+            }
+            if (abs($tot) < 0.005) {
+                $compens += count($g);
+                continue;
+            }
+            $item = $g[0]['it'];
+            $mem = null;
+            if (count($g) > 1) {
+                $fl = '';
+                $all = '';
+                foreach ($g as $x) {
+                    $all .= (string) ($x['it']['flag'] ?? '');
+                }
+                for ($q = 0, $ql = strlen($all); $q < $ql; $q++) {
+                    if (strpos($fl, $all[$q]) === false) {
+                        $fl .= $all[$q];
+                    }
+                }
+                $vs = array_map(static fn ($x) => (string) $x['it']['venc'], $g);
+                sort($vs, SORT_STRING);
+                $sameBank = true;
+                foreach ($g as $x) {
+                    if ((string) ($x['it']['banco'] ?? '') !== (string) ($g[0]['it']['banco'] ?? '')) {
+                        $sameBank = false;
+                        break;
+                    }
+                }
+                $anySage = false;
+                foreach ($g as $x) {
+                    if ($x['it']['origem'] === self::SAGE) {
+                        $anySage = true;
+                        break;
+                    }
+                }
+                $item = [
+                    'id' => 'gp|' . $gk, 'tipo' => 'P', 'tdoc' => 'Grp', 'doc' => count($g) . ' faturas', 'parte' => $g[0]['it']['parte'], 'party' => $g[0]['it']['party'] ?? '',
+                    'venc' => $vs[0], 'valor' => $tot, 'banco' => $sameBank ? (string) ($g[0]['it']['banco'] ?? '') : '', 'dataPlan' => '',
+                    'origem' => $anySage ? self::SAGE : $g[0]['it']['origem'], 'flag' => $fl,
+                ];
+                $mem = array_map(static fn ($x) => ['it' => $x['it'], 'v' => $x['v']], $g);
+            }
+            foreach ($g as $x) {
+                $payMap[$x['it']['id']] = ['n' => $pd, 'gid' => $item['id']];
+            }
+            $grpN++;
+            $grpDocs += count($g);
+            $ev = ['n' => $pd, 'atraso' => $atr, 'p' => $idxOf($pd), 'item' => $item, 'v' => $tot, 'saldo' => 0.0, 'due' => $g[0]['n']];
+            if ($mem !== null) {
+                $ev['mem'] = $mem;
+            }
+            $route($ev, $gg['b0']);
         }
 
-        // banco sugerido para os pagamentos sem banco
+        // banco sugerido para os pagamentos sem banco: pelo vencimento (vencidos primeiro, maiores primeiro no mesmo dia)
         if (count($pend) > 0) {
-            $D = $weekly ? $m0 + 7 * $np - $startN : $np;
+            $D = $endN - $startN + 1;
             $st = [];
             foreach ($cols as $c) {
                 $dl = array_fill(0, $D, 0.0);
@@ -469,7 +617,7 @@ final class Engine
                     $r += $x;
                     $bal[] = $r;
                 }
-                $st[] = ['id' => $c['id'], 'bal' => $bal, 'lim' => $useCCC ? $c['ccc'] : 0.0, 'on' => $c['saldo'] != 0.0 || count($evs[$c['id']] ?? []) > 0];
+                $st[] = ['id' => $c['id'], 'bal' => $bal, 'lim' => $useCCC ? $c['ccc'] : 0.0, 'mn' => $c['minimo'], 'on' => $c['saldo'] != 0.0 || count($evs[$c['id']] ?? []) > 0];
             }
             $ord = $pend;
             usort($ord, static fn ($a, $b) =>
@@ -491,9 +639,11 @@ final class Engine
                             $m = $sx['bal'][$t];
                         }
                     }
-                    $cand[] = ['i' => $i, 'h0' => $m - $e['v'], 'hL' => $m - $e['v'] + $sx['lim']];
+                    $cand[] = ['i' => $i, 'h0' => $m - $e['v'] - $sx['mn'], 'hL' => $m - $e['v'] - $sx['mn'] + $sx['lim']];
                 }
-                $fits = array_values(array_filter($cand, static fn ($x) => $x['hL'] >= -0.005));
+                $fits0 = array_values(array_filter($cand, static fn ($x) => $x['h0'] >= -0.005));
+                $fits = count($fits0) > 0 ? $fits0 : array_values(array_filter($cand, static fn ($x) => $x['hL'] >= -0.005));
+                $kx = static fn (array $x): float => count($fits0) > 0 ? $x['h0'] : $x['hL'];
                 $pick = $cand[0];
                 if ($e['v'] <= 0) {
                     $act = array_values(array_filter($cand, static fn ($x) => $st[$x['i']]['on']));
@@ -522,10 +672,10 @@ final class Engine
                                 $pick = $x;
                             }
                         } elseif ($crit === 'Minimizar transferências') {
-                            if ($x['hL'] < $pick['hL']) {
+                            if ($kx($x) < $kx($pick)) {
                                 $pick = $x;
                             }
-                        } elseif ($x['hL'] > $pick['hL']) {
+                        } elseif ($kx($x) > $kx($pick)) {
                             $pick = $x;
                         }
                     }
@@ -535,66 +685,154 @@ final class Engine
                     $st[$pick['i']]['bal'][$t] -= $e['v'];
                 }
                 $ok = $e['v'] <= 0 || $pick['hL'] >= -0.005;
-                $e['sug'] = ['head' => $pick['hL'], 'ok' => $ok];
+                $cc = $pick['h0'] < -0.005 && $e['v'] > 0;
+                $hd = count($fits0) > 0 && $e['v'] > 0 ? $pick['h0'] : $pick['hL'];
+                $e['sug'] = ['head' => $hd, 'ok' => $ok, 'ccc' => $cc];
                 $evs[$sid][] = $e;
-                $sugMap[$e['item']['id']] = ['bank' => $sid, 'head' => $pick['hL'], 'ok' => $ok];
+                $sugMap[$e['item']['id']] = ['bank' => $sid, 'head' => $hd, 'ok' => $ok, 'ccc' => $cc];
+                foreach ($e['mem'] ?? [] as $mm) {
+                    $sugMap[$mm['it']['id']] = ['bank' => $sid, 'head' => $hd, 'ok' => $ok, 'ccc' => $cc];
+                }
             }
         }
         if (isset($evs[self::SEM])) {
-            $cols[] = ['id' => self::SEM, 'nome' => 'Sem banco atribuído', 'saldo' => 0.0, 'ccc' => 0.0];
+            $cols[] = ['id' => self::SEM, 'nome' => 'Sem banco atribuído', 'saldo' => 0.0, 'ccc' => 0.0, 'minimo' => 0.0];
         }
+
+        // simulação diária por banco: recebimentos e créditos primeiro, depois pagamentos (maiores primeiro).
+        // Pagamento que deixe a conta à ordem abaixo do mínimo: usa a CCC em múltiplos de $step (até ao limite livre).
+        // No fim de cada dia com movimentos, havendo saldo acima do mínimo, repõe-se a CCC utilizada em múltiplos de $step.
+        $stepN = Util::parseNum($passo);
+        $step = $stepN !== null && $stepN > 0 ? (float) $stepN : 5000.0;
         $res = [];
         foreach ($cols as $c) {
             $list = $evs[$c['id']] ?? [];
             $cred = static fn (array $e): int => ($e['item']['tipo'] === 'R' || $e['v'] < 0) ? 0 : 1;
             usort($list, static fn (array $a, array $b): int => ($a['n'] <=> $b['n']) ?: ($cred($a) <=> $cred($b)) ?: ($b['v'] <=> $a['v']));
-            $lim = $useCCC ? $c['ccc'] : 0.0;
-            $run = $c['saldo'];
-            $min = $c['saldo'];
-            $first = $c['saldo'] + $lim < 0 ? $startN : null;
+            $cap = $useCCC && $c['id'] !== self::SEM ? $c['ccc'] : 0.0;
+            $mn = $c['minimo'];
             $rec = array_fill(0, $np, 0.0);
             $pag = array_fill(0, $np, 0.0);
+            $cu = array_fill(0, $np, 0.0);
+            $cr = array_fill(0, $np, 0.0);
+            $shortP = array_fill(0, $np, 0.0);
+            $balEnd = array_fill(0, $np, null);
+            $usedEndRaw = array_fill(0, $np, 0.0);
+            $seq = [];
+            $bal = $c['saldo'];
+            $used = 0.0;
+            $usedMax = 0.0;
+            $cuT = 0.0;
+            $crT = 0.0;
+            $cuN = 0;
+            $crN = 0;
+            $min = $c['saldo'];
+            $need = 0.0;
+            $first = null;
+            $i = 0;
+            $nl = count($list);
+            while ($i < $nl) {
+                $dn = $list[$i]['n'];
+                $lastP = $list[$i]['p'];
+                while ($i < $nl && $list[$i]['n'] === $dn) {
+                    $k = $i;
+                    $i++;
+                    $e = &$list[$k];
+                    $lastP = $e['p'];
+                    $mv = null;
+                    if ($e['item']['tipo'] === 'R') {
+                        $bal += $e['v'];
+                        $rec[$e['p']] += $e['v'];
+                    } else {
+                        $bal -= $e['v'];
+                        $pag[$e['p']] += $e['v'];
+                        if ($e['v'] > 0 && $bal < $mn - 0.005 && $cap - $used > 0.005) {
+                            $kk = ceil(($mn - $bal - 1e-9) / $step) * $step;
+                            $dr = min($kk, $cap - $used);
+                            $bal += $dr;
+                            $used += $dr;
+                            $cu[$e['p']] += $dr;
+                            $cuT += $dr;
+                            $cuN++;
+                            $e['cu'] = $dr;
+                            if ($used > $usedMax) {
+                                $usedMax = $used;
+                            }
+                            $mv = ['n' => $e['n'], 'p' => $e['p'], 'k' => 'U', 'v' => $dr, 'used' => $used, 'saldo' => $bal];
+                        }
+                        if ($e['v'] > 0 && $bal < $mn - 0.005) {
+                            $sh = $mn - $bal;
+                            if ($sh > $need) {
+                                $need = $sh;
+                            }
+                            if ($first === null) {
+                                $first = $e['n'];
+                            }
+                            if ($sh > $shortP[$e['p']]) {
+                                $shortP[$e['p']] = $sh;
+                            }
+                        }
+                    }
+                    $e['saldo'] = $bal;
+                    $e['ua'] = $used;
+                    if ($bal < $min) {
+                        $min = $bal;
+                    }
+                    $seq[] = ['n' => $e['n'], 'k' => $k];
+                    if ($mv !== null) {
+                        $seq[] = ['n' => $e['n'], 'm' => $mv];
+                    }
+                    unset($e);
+                }
+                if ($useCCC && $repor && $used > 0.005) {
+                    $sur = $bal - $mn;
+                    $r = $used < $step ? ($sur >= $used - 1e-9 ? $used : 0.0) : min($used, floor(($sur + 1e-9) / $step) * $step);
+                    if ($r > 0.005) {
+                        $bal -= $r;
+                        $used -= $r;
+                        $cr[$lastP] += $r;
+                        $crT += $r;
+                        $crN++;
+                        $seq[] = ['n' => $dn, 'm' => ['n' => $dn, 'p' => $lastP, 'k' => 'R', 'v' => $r, 'used' => $used, 'saldo' => $bal]];
+                    }
+                }
+                $balEnd[$lastP] = $bal;
+                $usedEndRaw[$lastP] = $used;
+            }
+            $close = [];
+            $usedEnd = [];
+            $rb = $c['saldo'];
+            $ru = 0.0;
+            for ($k = 0; $k < $np; $k++) {
+                if ($balEnd[$k] !== null) {
+                    $rb = $balEnd[$k];
+                    $ru = $usedEndRaw[$k];
+                }
+                $close[] = $rb;
+                $usedEnd[] = $ru;
+            }
             $sugN = 0;
             $sugT = 0.0;
-            foreach ($list as &$e) {
-                if ($e['item']['tipo'] === 'R') {
-                    $run += $e['v'];
-                    $rec[$e['p']] += $e['v'];
-                } else {
-                    $run -= $e['v'];
-                    $pag[$e['p']] += $e['v'];
-                }
-                $e['saldo'] = $run;
-                if ($run < $min) {
-                    $min = $run;
-                }
-                if ($first === null && $run + $lim < 0) {
-                    $first = $e['n'];
-                }
+            foreach ($list as $e) {
                 if (isset($e['sug'])) {
                     $sugN++;
                     $sugT += $e['v'];
                 }
             }
-            unset($e);
-            $close = [];
-            $r = $c['saldo'];
-            for ($i = 0; $i < $np; $i++) {
-                $r += $rec[$i] - $pag[$i];
-                $close[] = $r;
-            }
             $res[] = [
-                'id' => $c['id'], 'nome' => $c['nome'], 'saldo' => $c['saldo'], 'ccc' => $c['ccc'], 'lim' => $lim,
-                'list' => $list, 'rec' => $rec, 'pag' => $pag, 'close' => $close, 'min' => $min, 'first' => $first,
-                'need' => max(0.0, -($min + $lim)), 'recT' => array_sum($rec), 'pagT' => array_sum($pag), 'final' => $r,
-                'sugN' => $sugN, 'sugT' => $sugT,
+                'id' => $c['id'], 'nome' => $c['nome'], 'saldo' => $c['saldo'], 'ccc' => $c['ccc'], 'minimo' => $mn,
+                'list' => $list, 'seq' => $seq, 'rec' => $rec, 'pag' => $pag, 'cu' => $cu, 'cr' => $cr, 'close' => $close, 'usedEnd' => $usedEnd, 'shortP' => $shortP,
+                'min' => $min, 'first' => $first, 'need' => $need, 'recT' => array_sum($rec), 'pagT' => array_sum($pag), 'final' => $rb,
+                'usedMax' => $usedMax, 'usedFim' => $ru, 'cuT' => $cuT, 'crT' => $crT, 'cuN' => $cuN, 'crN' => $crN, 'sugN' => $sugN, 'sugT' => $sugT,
             ];
         }
         $sugV = 0.0;
         $sugBadN = 0;
         $sugBadV = 0.0;
+        $sugDocs = 0;
         foreach ($pend as $e) {
             $sugV += $e['v'];
+            $sugDocs += isset($e['mem']) ? count($e['mem']) : 1;
             $sx = $sugMap[$e['item']['id']] ?? null;
             if ($sx !== null && !$sx['ok'] && $e['v'] > 0) {
                 $sugBadN++;
@@ -602,11 +840,13 @@ final class Engine
             }
         }
         return [
-            'startN' => $startN, 'startIso' => Util::isoOf($startN), 'periods' => $periods, 'res' => $res, 'eff' => $eff,
+            'startN' => $startN, 'startIso' => Util::isoOf($startN), 'endN' => $endN, 'endIso' => Util::isoOf($endN), 'fimErr' => $fimErr, 'step' => $step,
+            'periods' => $periods, 'res' => $res, 'eff' => $eff,
             'fora' => $fora, 'foraV' => $foraV, 'invalid' => $invalid, 'vencFora' => $vencFora, 'vencForaV' => $vencForaV,
-            'compens' => $compens, 'ovR' => $ovR, 'ovP' => $ovP, 'sugMap' => $sugMap, 'sugN' => count($pend), 'sugV' => $sugV,
-            'sugBadN' => $sugBadN, 'sugBadV' => $sugBadV, 'view' => $view, 'dual' => $dual, 'sup' => $sup, 'recItems' => $recIt,
-            'prioIds' => $prioIds, 'weekly' => $weekly,
+            'compens' => $compens, 'ovR' => $ovR, 'ovP' => $ovP, 'sugMap' => $sugMap, 'sugN' => count($pend), 'sugV' => $sugV, 'sugDocs' => $sugDocs,
+            'sugBadN' => $sugBadN, 'sugBadV' => $sugBadV, 'payMap' => $payMap, 'grpN' => $grpN, 'grpDocs' => $grpDocs,
+            'view' => $view, 'dual' => $dual, 'sup' => $sup, 'recItems' => $recIt,
+            'prioIds' => $prioIds, 'weekly' => $weekly, 'monthly' => $monthly, 'vista' => $vista,
         ];
     }
 
@@ -731,7 +971,15 @@ final class Engine
                 $ccc += $r['ccc'];
             }
         }
+        $sm = static function (string $k) use ($proj): float {
+            $t = 0.0;
+            foreach ($proj['res'] as $r) {
+                $t += $r[$k];
+            }
+            return $t;
+        };
         return [
+            'cuT' => $sm('cuT'), 'crT' => $sm('crT'), 'cuN' => (int) $sm('cuN'), 'crN' => (int) $sm('crN'), 'usedFim' => $sm('usedFim'), 'usedPk' => $sm('usedMax'),
             'side' => $side, 'dRec' => $dRec, 'dPag' => $dPag, 'dClose' => $dClose, 'saldo0' => $saldo0, 'minV' => $minV, 'minI' => $minI, 'ccc' => $ccc,
             'topR' => $rank($ent['R'], 'v'), 'topP' => $rank($ent['P'], 'v'), 'ovNewR' => $rank($ent['R'], 'ovNew'), 'ovOldR' => $rank($ent['R'], 'ovOld'), 'ovP' => $rank($ent['P'], 'ov'),
         ];
@@ -748,7 +996,8 @@ final class Engine
     {
         $out = [];
         $startN = $proj['startN'];
-        $useCCC = (bool) ($s['useCCC'] ?? false);
+        $useCCC = (bool) ($s['useCCC'] ?? true);
+        $agrup = (bool) ($s['agrup'] ?? true);
         $netting = (bool) ($s['netting'] ?? true);
         $ruleR = (string) ($s['ruleR'] ?? '0');
         $ruleP = (string) ($s['ruleP'] ?? '0');
@@ -756,28 +1005,19 @@ final class Engine
         $eur = [Util::class, 'eur'];
         $pct = [Util::class, 'pct'];
         $real = array_values(array_filter($proj['res'], static fn ($r) => $r['id'] !== self::SEM));
-        $rawNeed = static fn (array $r): float => max(0.0, -$r['min']);
-        $firstNeg = static function (array $r) use ($startN): int {
-            if ($r['saldo'] < 0) {
-                return $startN;
-            }
-            foreach ($r['list'] as $x) {
-                if ($x['saldo'] < 0) {
-                    return $x['n'];
-                }
-            }
-            return $startN;
-        };
+        $rawNeed = static fn (array $r): float => $r['need'];
+        $firstNeg = static fn (array $r): int => $r['first'] !== null ? $r['first'] : $startN;
+        $freeOf = static fn (array $r): float => $r['usedMax'] > 0.005 ? 0.0 : max(0.0, $r['min'] - $r['minimo']);
         $defs = array_values(array_filter($real, static fn ($r) => $rawNeed($r) > 0.5));
         usort($defs, static fn ($a, $b) => $rawNeed($b) <=> $rawNeed($a));
         $freeInit = [];
         foreach ($real as $r) {
-            $freeInit[$r['id']] = max(0.0, $r['min']);
+            $freeInit[$r['id']] = $freeOf($r);
         }
         $donors = [];
         foreach ($real as $r) {
-            if ($r['min'] > 0.5) {
-                $donors[] = ['r' => $r, 'free' => $r['min']];
+            if ($freeOf($r) > 0.5) {
+                $donors[] = ['r' => $r, 'free' => $freeOf($r)];
             }
         }
         usort($donors, static fn ($a, $b) => $b['free'] <=> $a['free']);
@@ -797,7 +1037,7 @@ final class Engine
                 $out[] = [
                     't' => 'Transferir ' . $eur($t) . ' de ' . $dn['r']['nome'] . ' para ' . $d['nome'] . ' até ' . Util::dm($firstNeg($d)),
                     'imp' => $t,
-                    'why' => $dn['r']['nome'] . ' mantém um saldo nunca inferior a ' . $eur($dn['r']['min']) . ' em todo o horizonte, enquanto ' . $d['nome'] . ' fica negativo a partir de ' . Util::dm($firstNeg($d)) . ' (necessidade máxima ' . $eur($rawNeed($d)) . '). A transferência evita recorrer à CCC ou a financiamento.',
+                    'why' => $dn['r']['nome'] . ' mantém um saldo nunca inferior a ' . $eur($dn['r']['min']) . ' (mínimo exigido ' . $eur($dn['r']['minimo']) . ') em todo o horizonte, sem usar a CCC, enquanto ' . $d['nome'] . ' fica abaixo do seu saldo mínimo a partir de ' . Util::dm($firstNeg($d)) . ', mesmo depois de usar a CCC (falta máxima ' . $eur($rawNeed($d)) . '). A transferência evita financiamento externo.',
                 ];
             }
             unset($dn);
@@ -808,21 +1048,46 @@ final class Engine
             if ($need < 0.5) {
                 continue;
             }
-            $cov = min($need, $d['ccc']);
-            if ($cov > 0.5) {
+            if (!$useCCC && $d['ccc'] > 0.5) {
                 $out[] = [
-                    't' => ($useCCC ? 'Manter a CCC do ' : 'Usar a CCC do ') . $d['nome'] . ' para cobrir o pico de ' . $eur($need),
-                    'imp' => $cov,
-                    'why' => 'Depois das transferências, o ' . $d['nome'] . ' ainda precisa de ' . $eur($need) . ' a partir de ' . Util::dm($firstNeg($d)) . '. Limite de CCC disponível: ' . $eur($d['ccc']) . ($need > $d['ccc'] ? '; ficam por cobrir ' . $eur($need - $d['ccc']) . ' mesmo com todo o limite' : '; cobre o pico por completo') . '. O custo de juros não está calculado.',
+                    't' => 'Ligar a utilização da CCC do ' . $d['nome'] . ' para cobrir a falta de ' . $eur($need),
+                    'imp' => min($need, $d['ccc']),
+                    'why' => 'Com Usar CCC quando falta saldo desligado, o ' . $d['nome'] . ' fica abaixo do saldo mínimo a partir de ' . Util::dm($firstNeg($d)) . ' (falta máxima ' . $eur($need) . '). Limite de CCC: ' . $eur($d['ccc']) . '. O custo de juros não está calculado.',
                 ];
-            }
-            if ($need > $d['ccc'] + 0.5) {
+            } else {
                 $out[] = [
                     't' => 'Financiamento adicional ou renegociação de prazos no ' . $d['nome'],
-                    'imp' => $need - $d['ccc'],
-                    'why' => 'Depois das transferências e de toda a CCC (' . $eur($d['ccc']) . '), faltam ' . $eur($need - $d['ccc']) . ' a partir de ' . Util::dm($firstNeg($d)) . '. Opções: financiamento de curto prazo, antecipação de cobranças ou diferimento acordado de pagamentos.',
+                    'imp' => $need,
+                    'why' => 'Depois das transferências e de toda a CCC (' . $eur($d['ccc']) . '), faltam ' . $eur($need) . ' para o saldo mínimo de ' . $eur($d['minimo']) . ' a partir de ' . Util::dm($firstNeg($d)) . '. Opções: financiamento de curto prazo, antecipação de cobranças ou diferimento acordado de pagamentos.',
                 ];
             }
+        }
+        if ($dash['cuT'] > 0.5) {
+            $top = $real;
+            usort($top, static fn ($a, $b) => $b['usedMax'] <=> $a['usedMax']);
+            $top = $top[0] ?? null;
+            $out[] = [
+                't' => 'CCC: ' . (int) $dash['cuN'] . ' utilizações (' . $eur($dash['cuT']) . ') e ' . (int) $dash['crN'] . ' reposições (' . $eur($dash['crT']) . ') no horizonte' . ($dash['usedFim'] > 0.5 ? '; ficam ' . $eur($dash['usedFim']) . ' por repor' : ''),
+                'imp' => $dash['usedPk'],
+                'why' => 'A CCC cobre os pagamentos de sexta-feira que deixariam a conta à ordem abaixo do saldo mínimo, em múltiplos de ' . $eur($proj['step']) . ', e é reposta quando há saldo acima do mínimo. Pico utilizado (soma dos picos de cada banco): ' . $eur($dash['usedPk']) . ($top !== null && $top['usedMax'] > 0.5 ? ' (maior utilização num banco: ' . $top['nome'] . ', ' . $eur($top['usedMax']) . ')' : '') . '. Antecipar recebimentos ou transferir saldo de bancos com folga evita juros da CCC; o custo de juros não está calculado.',
+            ];
+        }
+        if ($agrup && $proj['grpN'] > 0) {
+            $gi = 0.0;
+            foreach ($proj['res'] as $r) {
+                $sr = 0.0;
+                foreach ($r['list'] as $e) {
+                    if (!isset($e['sug']) && $e['item']['tipo'] === 'P' && $e['v'] > 0 && isset($e['due']) && !self::isRecIt($e['item']) && !str_starts_with((string) $e['item']['origem'], self::OUT) && ($e['item']['dataPlan'] ?? '') === '') {
+                        $sr += $e['v'];
+                    }
+                }
+                $gi += $sr;
+            }
+            $out[] = [
+                't' => 'Pagamentos agrupados por fornecedor e semana: ' . $proj['grpDocs'] . ' faturas em ' . $proj['grpN'] . ' pagamentos',
+                'imp' => $gi + $proj['sugV'],
+                'why' => 'Cada fornecedor recebe, no máximo, um pagamento por semana ISO, à sexta-feira (regra do dia de pagamento nos parâmetros), com os créditos compensados dentro do grupo. Reduz o número de transferências; o impacto é o valor agrupado.',
+            ];
         }
         foreach (array_slice($defs, 0, 2) as $d) {
             if (($rest[$d['id']] ?? 0.0) < 0.5) {
@@ -942,7 +1207,7 @@ final class Engine
             $out[] = [
                 't' => 'Escalonar ' . $ovPn . ' pagamentos vencidos que hoje caem todos no dia de início',
                 'imp' => $ovPv,
-                'why' => 'Documentos Sage vencidos que representam ' . $pct($ovPv, $totPv) . ' dos pagamentos do horizonte e estão todos planeados a ' . Util::dm($startN) . '. Maiores: ' . $tops . '. Acorde datas com os principais fornecedores ou escolha outra regra em Pagamentos vencidos (+7, +14 ou +30 dias) para ver o efeito. Já estão fora do prazo: confirme juros de mora e risco de fornecimento antes de adiar.',
+                'why' => 'Documentos Sage vencidos que representam ' . $pct($ovPv, $totPv) . ' dos pagamentos do horizonte e estão todos planeados a ' . Util::dm($startN) . ($agrup ? ' (pagos na primeira sexta-feira)' : '') . '. Maiores: ' . $tops . '. Acorde datas com os principais fornecedores ou escolha outra regra em Pagamentos vencidos (+7, +14 ou +30 dias) para ver o efeito. Já estão fora do prazo: confirme juros de mora e risco de fornecimento antes de adiar.',
             ];
         }
         $early = 0.0;
@@ -1034,7 +1299,7 @@ final class Engine
             }
         }
         $avg = count($byDay) > 0 ? $totPv / count($byDay) : 0.0;
-        if (count($byDay) > 2 && $totPv > 0 && $peakV >= 2.5 * $avg && $peakV >= 0.1 * $totPv) {
+        if (!$agrup && count($byDay) > 2 && $totPv > 0 && $peakV >= 2.5 * $avg && $peakV >= 0.1 * $totPv) {
             $out[] = [
                 't' => 'Distribuir os pagamentos concentrados em ' . Util::fmtD(Util::isoOf($peakN)),
                 'imp' => $peakV - $avg,

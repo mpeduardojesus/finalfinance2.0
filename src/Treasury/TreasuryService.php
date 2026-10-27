@@ -17,7 +17,7 @@ final class TreasuryService
     public const SAGE = Engine::SAGE;
     public const PAGE = 30;
     public const PP = 50;
-    private const HORIZONS = ['4', '6', '8', '10', '12', '16', '20', '26'];
+    private const HORIZONS_MAX = 104;
 
     /** @var array<string,mixed>|null */
     private ?array $ctx = null;
@@ -90,7 +90,7 @@ final class TreasuryService
         $ref = (string) ($sage['ref'] ?? gmdate('Y-m-d'));
         $banks = [];
         foreach ($state['banks'] as $b) {
-            $banks[] = ['id' => (string) $b['id'], 'nome' => (string) $b['nome'], 'saldo' => (float) ($b['saldo'] ?? 0), 'ccc' => (float) ($b['ccc'] ?? 0)];
+            $banks[] = ['id' => (string) $b['id'], 'nome' => (string) $b['nome'], 'saldo' => (float) ($b['saldo'] ?? 0), 'ccc' => (float) ($b['ccc'] ?? 0), 'minimo' => Engine::minOf($b)];
         }
         $this->projCache = null;
         return $this->ctx = [
@@ -131,7 +131,7 @@ final class TreasuryService
                     return (string) $b['id'];
                 }
             }
-            $nb = ['id' => $alias[0] ?? 'b' . bin2hex(random_bytes(4)), 'nome' => $alias[1] ?? mb_substr($name, 0, 100), 'saldo' => 0.0, 'ccc' => 0.0];
+            $nb = ['id' => $alias[0] ?? 'b' . bin2hex(random_bytes(4)), 'nome' => $alias[1] ?? mb_substr($name, 0, 100), 'saldo' => 0.0, 'ccc' => 0.0, 'minimo' => 5000.0];
             $banks[] = $nb;
             $created++;
             return $nb['id'];
@@ -270,10 +270,12 @@ final class TreasuryService
         $proj = $this->projFor($c);
         $res = [];
         foreach ($proj['res'] as $r) {
-            $status = $r['need'] > 0 ? 'falta' : ($r['min'] < 0 ? 'ccc' : 'ok');
+            $status = $r['need'] > 0 ? 'falta' : ($r['cuT'] > 0.005 ? 'ccc' : 'ok');
             $res[] = [
-                'id' => $r['id'], 'nome' => $r['nome'], 'saldo' => $r['saldo'], 'ccc' => $r['ccc'], 'lim' => $r['lim'],
+                'id' => $r['id'], 'nome' => $r['nome'], 'saldo' => $r['saldo'], 'ccc' => $r['ccc'], 'minimo' => $r['minimo'],
                 'rec' => $r['rec'], 'pag' => $r['pag'], 'close' => $r['close'], 'min' => $r['min'],
+                'cu' => $r['cu'], 'cr' => $r['cr'], 'usedEnd' => $r['usedEnd'], 'shortP' => $r['shortP'],
+                'cuN' => $r['cuN'], 'cuT' => $r['cuT'], 'crN' => $r['crN'], 'crT' => $r['crT'], 'usedFim' => $r['usedFim'], 'usedMax' => $r['usedMax'],
                 'first' => $r['first'] !== null ? Util::isoOf($r['first']) : null,
                 'need' => $r['need'], 'recT' => $r['recT'], 'pagT' => $r['pagT'], 'final' => $r['final'],
                 'sugN' => $r['sugN'], 'sugT' => $r['sugT'],
@@ -284,16 +286,18 @@ final class TreasuryService
         $sel = $this->selectBank($proj['res'], '');
         $s = $c['settings'];
         return [
-            'start' => $proj['startIso'],
+            'start' => $proj['startIso'], 'end' => $proj['endIso'], 'fimErr' => $proj['fimErr'], 'vista' => $proj['vista'], 'step' => $proj['step'],
             'ref' => $c['ref'],
             'periods' => $proj['periods'],
             'banks' => $res,
+            'agrup' => ['ligado' => (bool) $s['agrup'], 'n' => $proj['grpN'], 'docs' => $proj['grpDocs']],
+            'useCCC' => (bool) $s['useCCC'], 'repor' => (bool) $s['repor'], 'diaPag' => (string) $s['diaPag'], 'regraDia' => (string) $s['regraDia'],
             'defaultBank' => $sel['id'] ?? '',
             'fora' => $proj['fora'], 'foraV' => $proj['foraV'], 'invalid' => $proj['invalid'],
             'vencFora' => $proj['vencFora'], 'vencForaV' => $proj['vencForaV'], 'compens' => $proj['compens'],
             'ovR' => $proj['ovR'], 'ovP' => $proj['ovP'],
             'recTot' => array_sum(array_column($res, 'recT')), 'pagTot' => array_sum(array_column($res, 'pagT')),
-            'sugerido' => ['n' => $proj['sugN'], 'v' => $proj['sugV'], 'badN' => $proj['sugBadN'], 'badV' => $proj['sugBadV']],
+            'sugerido' => ['n' => $proj['sugN'], 'v' => $proj['sugV'], 'docs' => $proj['sugDocs'], 'badN' => $proj['sugBadN'], 'badV' => $proj['sugBadV']],
             'modoP' => $s['modoP'], 'crit' => $s['crit'], 'prio' => array_map(static fn ($id) => ['id' => $id, 'nome' => (string) (array_column($c['banks'], 'nome', 'id')[$id] ?? $id)], $proj['prioIds']),
             'recorrentes' => ['nP' => count(array_filter($proj['recItems'], fn ($x) => $x['tipo'] === 'P')), 'vP' => array_sum(array_map(fn ($x) => $x['valor'], array_filter($proj['recItems'], fn ($x) => $x['tipo'] === 'P'))),
                 'nR' => count(array_filter($proj['recItems'], fn ($x) => $x['tipo'] === 'R')), 'vR' => array_sum(array_map(fn ($x) => $x['valor'], array_filter($proj['recItems'], fn ($x) => $x['tipo'] === 'R')))],
@@ -321,8 +325,8 @@ final class TreasuryService
         return $res[0] ?? null;
     }
 
-    /** Detalhe do plano de um banco (linhas por data + totais por período), paginado (50). @return array<string,mixed> */
-    public function planDetail(string $bank, int $period, bool $showRec, int $page): array
+    /** Detalhe do plano de um banco (linhas por data, CCC e totais por período), paginado (50). @return array<string,mixed> */
+    public function planDetail(string $bank, int $period, bool $showRec, int $page, bool $showFat = false): array
     {
         $c = $this->context();
         $proj = $this->projFor($c);
@@ -330,22 +334,38 @@ final class TreasuryService
         if ($sel === null) {
             return ['bank' => null, 'rows' => [], 'page' => 0, 'pages' => 1, 'total' => 0];
         }
+        $mn = $sel['minimo'];
         $rows = [];
         foreach ($proj['periods'] as $i => $per) {
             if ($period !== -1 && $period !== $i) {
                 continue;
             }
             $has = false;
-            foreach ($sel['list'] as $e) {
-                if ($e['p'] !== $i) {
+            foreach ($sel['seq'] as $q) {
+                if (isset($q['m'])) {
+                    $p = $q['m']['p'];
+                } else {
+                    $p = $sel['list'][$q['k']]['p'];
+                }
+                if ($p !== $i) {
                     continue;
                 }
                 $has = true;
-                if ($e['item']['tipo'] === 'R' && !$showRec) {
+                if (isset($q['m'])) {
+                    $m = $q['m'];
+                    $rows[] = [
+                        'k' => 'ccc', 'date' => Util::isoOf($m['n']), 'semanaIso' => Util::isoWeekLabelN($m['n']), 'mov' => $m['k'],
+                        'texto' => $m['k'] === 'U' ? 'Utilização da CCC' : 'Reposição da CCC', 'valor' => $m['v'], 'saldo' => $m['saldo'], 'used' => $m['used'],
+                        'nota' => $m['k'] === 'U' ? 'Saldo abaixo do mínimo de ' . Util::eur($mn) . ': múltiplos de ' . Util::eur($proj['step']) : 'Saldo acima do mínimo: repõe a CCC',
+                    ];
                     continue;
                 }
-                $short = $e['saldo'] + $sel['lim'] < 0;
+                $e = $sel['list'][$q['k']];
                 $it = $e['item'];
+                if ($it['tipo'] === 'R' && !$showRec) {
+                    continue;
+                }
+                $short = $it['tipo'] === 'P' && $e['v'] > 0 && $e['saldo'] < $mn - 0.005;
                 $origem = '';
                 if ($it['tipo'] === 'P' && !isset($e['sug'])) {
                     $origem = ($it['banco'] ?? '') !== '' ? 'documento' : ((($c['partyBank'][Engine::pkOf($it)] ?? '') === $sel['id']) ? 'fornecedor' : 'defeito');
@@ -353,10 +373,16 @@ final class TreasuryService
                 $rows[] = [
                     'k' => 'ev', 'date' => Util::isoOf($e['n']), 'semanaIso' => Util::isoWeekLabelN($e['n']), 'atraso' => $e['atraso'], 'alterada' => ($it['dataPlan'] ?? '') !== '',
                     'tipo' => $it['tipo'], 'tdoc' => $it['tdoc'], 'doc' => $it['doc'], 'parte' => $it['parte'], 'rec' => Engine::isRecIt($it),
+                    'grupo' => isset($e['mem']) ? count($e['mem']) : 0, 'vencSemana' => Util::isoWeekLabel((string) $it['venc']),
                     'valor' => $e['v'], 'saldo' => $e['saldo'],
-                    'estado' => $it['tipo'] === 'P' ? ($short ? 'falta' : ($e['saldo'] < 0 ? 'ccc' : '')) : '',
-                    'sug' => isset($e['sug']) ? ['ok' => $e['sug']['ok'], 'head' => $e['sug']['head']] : null, 'origemBanco' => $origem,
+                    'estado' => $it['tipo'] === 'P' ? ($short ? 'falta' : (isset($e['cu']) ? 'ccc' : '')) : '',
+                    'sug' => isset($e['sug']) ? ['ok' => $e['sug']['ok'], 'head' => $e['sug']['head'], 'ccc' => $e['sug']['ccc']] : null, 'origemBanco' => $origem,
                 ];
+                if (isset($e['mem']) && $showFat) {
+                    foreach ($e['mem'] as $mm) {
+                        $rows[] = ['k' => 'fat', 'doc' => $mm['it']['doc'], 'parte' => $mm['it']['parte'], 'valor' => $mm['v'], 'venc' => $mm['it']['venc']];
+                    }
+                }
             }
             if (!$has) {
                 continue;
@@ -364,14 +390,15 @@ final class TreasuryService
             $cl = $sel['close'][$i];
             $rows[] = [
                 'k' => 'tot', 'label' => $per['label'], 'pag' => $sel['pag'][$i], 'rec' => $sel['rec'][$i], 'saldo' => $cl,
-                'estado' => $cl + $sel['lim'] < 0 ? 'neg' : ($cl < 0 ? 'ccc' : 'ok'),
+                'estado' => $sel['shortP'][$i] > 0 ? 'abaixo' : ($sel['usedEnd'][$i] > 0.005 ? 'ccc' : 'ok'), 'used' => $sel['usedEnd'][$i],
             ];
         }
         $total = count($rows);
         $pages = max(1, (int) ceil($total / self::PP));
         $pg = max(0, min($page, $pages - 1));
         return [
-            'bank' => ['id' => $sel['id'], 'nome' => $sel['nome'], 'saldo' => $sel['saldo'], 'ccc' => $sel['ccc'], 'lim' => $sel['lim']],
+            'bank' => ['id' => $sel['id'], 'nome' => $sel['nome'], 'saldo' => $sel['saldo'], 'ccc' => $sel['ccc'], 'minimo' => $mn],
+            'useCCC' => (bool) $c['settings']['useCCC'], 'step' => $proj['step'],
             'rows' => array_slice($rows, $pg * self::PP, self::PP),
             'page' => $pg, 'pages' => $pages, 'total' => $total,
         ];
@@ -410,22 +437,24 @@ final class TreasuryService
             $sideOut[$t] = $x + ['avgDias' => $avg($x), 'avgVencido' => $age($x), 'pctOv' => Util::pct($x['ov'], $x['tot'])];
         }
         return [
-            'start' => $proj['startIso'], 'nPeriods' => count($periods), 'perLabel' => $proj['weekly'] ? 'semanas' : 'dias',
+            'start' => $proj['startIso'], 'nPeriods' => count($periods), 'perLabel' => $proj['weekly'] ? 'semanas' : ($proj['monthly'] ? 'meses' : 'dias'), 'end' => $proj['endIso'], 'vista' => $proj['vista'],
             'periods' => array_map(fn ($p) => ['label' => $p['label'], 'short' => $p['short'], 'iso' => $p['iso']], $periods),
-            'saldo0' => $d['saldo0'], 'nBanks' => count($c['banks']), 'ccc' => $d['ccc'], 'useCCC' => (bool) $s['useCCC'],
+            'saldo0' => $d['saldo0'], 'nBanks' => count($c['banks']), 'ccc' => $d['ccc'], 'useCCC' => (bool) $s['useCCC'], 'step' => $proj['step'],
+            'cuT' => $d['cuT'], 'crT' => $d['crT'], 'cuN' => $d['cuN'], 'crN' => $d['crN'], 'usedFim' => $d['usedFim'], 'usedPk' => $d['usedPk'],
+            'agrup' => ['ligado' => (bool) $s['agrup'], 'n' => $proj['grpN'], 'docs' => $proj['grpDocs']],
             'recH' => array_sum($d['dRec']), 'pagH' => array_sum($d['dPag']),
             'saldoFinal' => $d['dClose'] !== [] ? $d['dClose'][count($d['dClose']) - 1] : $d['saldo0'],
             'minV' => $d['minV'], 'minLabel' => $d['minI'] < 0 ? 'no início' : $periods[$d['minI']]['label'], 'minI' => $d['minI'],
             'shortBanks' => array_map(fn ($r) => [
                 'nome' => $r['nome'], 'saldo' => $r['saldo'], 'min' => $r['min'], 'first' => $r['first'] !== null ? Util::isoOf($r['first']) : null,
-                'periodos' => count(array_filter($r['close'], fn ($x) => $x + $r['lim'] < 0)), 'need' => $r['need'],
+                'periodos' => count(array_filter($r['shortP'], fn ($x) => $x > 0)), 'need' => $r['need'],
             ], $short),
             'nReal' => count($real),
             'sug' => ['n' => $proj['sugN'], 'v' => $proj['sugV'], 'badN' => $proj['sugBadN'], 'badV' => $proj['sugBadV']],
             'sem' => ['pagT' => $sem['pagT'] ?? 0.0, 'recT' => $sem['recT'] ?? 0.0],
             'side' => $sideOut, 'bands' => Engine::BANDS,
             'dRec' => $d['dRec'], 'dPag' => $d['dPag'], 'dClose' => $d['dClose'],
-            'banks' => array_values(array_map(fn ($r) => ['nome' => $r['nome'], 'saldo' => $r['saldo'], 'ccc' => $r['ccc'], 'final' => $r['final']],
+            'banks' => array_values(array_map(fn ($r) => ['nome' => $r['nome'], 'saldo' => $r['saldo'], 'ccc' => $r['ccc'], 'final' => $r['final'], 'usedFim' => $r['usedFim']],
                 array_filter($proj['res'], fn ($r) => $r['saldo'] != 0.0 || count($r['list']) > 0))),
             'topR' => $top($d['topR'], $side['R']['tot']), 'topP' => $top($d['topP'], $side['P']['tot']),
             'topRSum' => array_sum(array_column(array_slice($d['topR'], 0, 10), 'v')), 'topPSum' => array_sum(array_column(array_slice($d['topP'], 0, 10), 'v')),
@@ -509,7 +538,7 @@ final class TreasuryService
             $out[] = [
                 'id' => $it['id'], 'tipo' => $it['tipo'], 'tdoc' => $it['tdoc'], 'doc' => $it['doc'], 'parte' => $it['parte'],
                 'party' => $it['party'], 'venc' => $it['venc'], 'semanaIso' => Util::isoWeekLabel($it['venc']),
-                'dataPlan' => $it['dataPlan'] ?? '', 'semanaIsoPlan' => Util::isoWeekLabel($it['dataPlan'] ?? ''), 'valor' => $it['valor'],
+                'dataPlan' => $it['dataPlan'] ?? '', 'dataPag' => isset($proj['payMap'][$it['id']]) ? Util::isoOf($proj['payMap'][$it['id']]['n']) : '', 'semanaIsoPlan' => Util::isoWeekLabel($it['dataPlan'] ?? ''), 'valor' => $it['valor'],
                 'liquido' => ($net !== null && abs($net - $it['valor']) > 0.004) ? $net : null,
                 'banco' => (string) ($it['banco'] ?? ''), 'bancoEfetivo' => $b, 'bancoOrigem' => $src,
                 'flag' => (string) ($it['flag'] ?? ''), 'origem' => $it['origem'], 'nota' => self::notaOf($it), 'editable' => $it['editable'],
@@ -625,19 +654,53 @@ final class TreasuryService
                     }
                     break;
                 case 'horiz':
-                    if (in_array((string) $v, self::HORIZONS, true)) {
-                        $new[$k] = (string) $v;
+                    if ((is_int($v) || is_string($v)) && preg_match('/^[0-9]{1,3}$/', (string) $v) === 1 && (int) $v >= 1 && (int) $v <= self::HORIZONS_MAX) {
+                        $new[$k] = (string) (int) $v;
                     } else {
-                        $errors[$k] = 'Horizonte inválido (' . implode(', ', self::HORIZONS) . ' semanas).';
+                        $errors[$k] = 'Horizonte inválido (1 a ' . self::HORIZONS_MAX . ' semanas).';
+                    }
+                    break;
+                case 'fim':
+                    $t = is_string($v) ? trim($v) : '';
+                    if ($t === '') {
+                        $new[$k] = '';
+                    } elseif (($d = Util::parseDate($t)) !== null) {
+                        $new[$k] = $d;
+                    } else {
+                        $errors[$k] = 'Data final inválida: use DD/MM/AAAA ou AAAA-MM-DD (vazio = automática, pelo horizonte).';
                     }
                     break;
                 case 'vista':
-                    if (in_array($v, ['Semanal', 'Diária'], true)) {
+                    if (in_array($v, ['Semanal', 'Mensal', 'Diária'], true)) {
                         $new[$k] = $v;
                     } else {
-                        $errors[$k] = 'Vista inválida (Semanal ou Diária).';
+                        $errors[$k] = 'Vista inválida (Semanal, Mensal ou Diária).';
                     }
                     break;
+                case 'diaPag':
+                    if ((is_int($v) || is_string($v)) && in_array((string) $v, ['0', '1', '2', '3', '4'], true)) {
+                        $new[$k] = (string) $v;
+                    } else {
+                        $errors[$k] = 'Dia de pagamento inválido (segunda a sexta-feira).';
+                    }
+                    break;
+                case 'regraDia':
+                    if (in_array($v, ['ant', 'sem'], true)) {
+                        $new[$k] = $v;
+                    } else {
+                        $errors[$k] = 'Regra inválida (ant ou sem).';
+                    }
+                    break;
+                case 'passo':
+                    $n = (is_string($v) || is_int($v) || is_float($v)) ? Util::parseNum($v) : null;
+                    if ($n !== null && $n > 0 && $n <= 1e9) {
+                        $new[$k] = round($n, 2);
+                    } else {
+                        $errors[$k] = 'Múltiplo da CCC inválido: indique um valor positivo (por defeito 5.000,00 €).';
+                    }
+                    break;
+                case 'agrup':
+                case 'repor':
                 case 'useCCC':
                 case 'netting':
                 case 'incPend':
@@ -686,6 +749,21 @@ final class TreasuryService
         if ($errors !== []) {
             throw new HttpException(422, 'Dados inválidos.', $errors);
         }
+        // horizonte e data final andam juntos: escolher o horizonte limpa a data final; uma data final válida acerta o horizonte
+        if (array_key_exists('horiz', $new) && !array_key_exists('fim', $new)) {
+            $new['fim'] = '';
+        }
+        if (($new['fim'] ?? '') !== '') {
+            $ini = array_key_exists('inicio', $new) ? (string) $new['inicio'] : (string) $c['settings']['inicio'];
+            $startN = Util::dayNum(Util::parseDate($ini) ?? (string) $c['ref']);
+            $fimN = Util::dayNum((string) $new['fim']);
+            if ($fimN > $startN + 1830) {
+                throw new HttpException(422, 'Dados inválidos.', ['fim' => 'Data final demasiado distante (máximo de 5 anos após o início).']);
+            }
+            if ($fimN >= $startN) {
+                $new['horiz'] = (string) max(1, (int) ceil(($fimN - Util::mondayOf($startN) + 1) / 7));
+            }
+        }
         $demo = $c['demo'];
         $this->store->mutateState($demo, function (array $st) use ($new): array {
             $st['settings'] = array_merge($st['settings'], $new);
@@ -717,7 +795,7 @@ final class TreasuryService
         return $this->projFor($this->context())['prioIds'];
     }
 
-    /** @param array<string,mixed> $in @return array{0:string,1:float,2:float} */
+    /** @param array<string,mixed> $in @return array{0:string,1:float,2:float,3:float} */
     private function bankFields(array $in, ?array $base): array
     {
         $errors = [];
@@ -728,17 +806,17 @@ final class TreasuryService
                 $errors['nome'] = 'Obrigatório, até 100 caracteres.';
             }
         }
-        $vals = ['saldo' => (float) ($base['saldo'] ?? 0), 'ccc' => (float) ($base['ccc'] ?? 0)];
-        foreach (['saldo', 'ccc'] as $k) {
+        $vals = ['saldo' => (float) ($base['saldo'] ?? 0), 'ccc' => (float) ($base['ccc'] ?? 0), 'minimo' => $base !== null ? Engine::minOf($base) : 5000.0];
+        foreach (['saldo', 'ccc', 'minimo'] as $k) {
             if (array_key_exists($k, $in)) {
                 if ($in[$k] === null || (is_string($in[$k]) && trim($in[$k]) === '')) {
-                    $vals[$k] = 0.0;
+                    $vals[$k] = $k === 'minimo' ? 5000.0 : 0.0;
                 } else {
                     $n = Util::parseNum($in[$k]);
                     if ($n === null || abs($n) > 1e12) {
                         $errors[$k] = 'Valor inválido.';
                     } else {
-                        $vals[$k] = round($n, 2);
+                        $vals[$k] = round($k === 'minimo' ? max(0.0, $n) : $n, 2);
                     }
                 }
             }
@@ -746,15 +824,15 @@ final class TreasuryService
         if ($errors !== []) {
             throw new HttpException(422, 'Dados inválidos.', $errors);
         }
-        return [(string) $nome, $vals['saldo'], $vals['ccc']];
+        return [(string) $nome, $vals['saldo'], $vals['ccc'], $vals['minimo']];
     }
 
     /** @param array<string,mixed> $in @return array<string,mixed> */
     public function createBank(array $in): array
     {
-        [$nome, $saldo, $ccc] = $this->bankFields($in, null);
+        [$nome, $saldo, $ccc, $minimo] = $this->bankFields($in, null);
         $demo = $this->context()['demo'];
-        $bank = ['id' => 'b' . bin2hex(random_bytes(4)), 'nome' => $nome, 'saldo' => $saldo, 'ccc' => $ccc];
+        $bank = ['id' => 'b' . bin2hex(random_bytes(4)), 'nome' => $nome, 'saldo' => $saldo, 'ccc' => $ccc, 'minimo' => $minimo];
         $this->store->mutateState($demo, function (array $st) use ($bank): array {
             if (count($st['banks']) >= 40) {
                 throw new HttpException(422, 'Limite de bancos atingido (40).');
@@ -773,8 +851,8 @@ final class TreasuryService
         $out = $this->store->mutateState($demo, function (array $st) use ($id, $in): array {
             foreach ($st['banks'] as $i => $b) {
                 if ((string) $b['id'] === $id) {
-                    [$nome, $saldo, $ccc] = $this->bankFields($in, $b);
-                    $st['banks'][$i] = ['id' => $id, 'nome' => $nome, 'saldo' => $saldo, 'ccc' => $ccc];
+                    [$nome, $saldo, $ccc, $minimo] = $this->bankFields($in, $b);
+                    $st['banks'][$i] = ['id' => $id, 'nome' => $nome, 'saldo' => $saldo, 'ccc' => $ccc, 'minimo' => $minimo];
                     return [$st, $st['banks'][$i]];
                 }
             }
@@ -1534,25 +1612,40 @@ final class TreasuryService
             return implode("\n", $lines);
         }
         if ($kind === 'balances') {
-            $lines = ['banco;saldo;ccc_disponivel'];
+            $lines = ['banco;saldo;ccc_disponivel;saldo_minimo'];
             foreach ($c['banks'] as $b) {
-                $lines[] = implode(';', array_map([Util::class, 'csvQ'], [$b['nome'], Util::fmtIn($b['saldo']), Util::fmtIn($b['ccc'])]));
+                $lines[] = implode(';', array_map([Util::class, 'csvQ'], [$b['nome'], Util::fmtIn($b['saldo']), Util::fmtIn($b['ccc']), Util::fmtIn($b['minimo'])]));
             }
             return implode("\n", $lines);
         }
         if ($kind === 'plan') {
-            $lines = ['banco;banco_origem;documento;fornecedor;vencimento;semana_iso_venc;data_prevista;semana_iso_prevista;valor;saldo_apos;nota'];
+            $lines = ['banco;tipo_linha;banco_origem;fornecedor;semana_iso;data_pagamento;semana_iso_pagamento;n_faturas;valor;utilizacao_ccc;reposicao_ccc;saldo_ordem_apos;ccc_utilizada_apos;documentos;vencimento_mais_antigo;nota'];
             foreach ($proj['res'] as $r) {
-                foreach ($r['list'] as $e) {
+                foreach ($r['seq'] as $q) {
+                    if (isset($q['m'])) {
+                        $m = $q['m'];
+                        if ($m['k'] === 'R') {
+                            $lines[] = implode(';', array_map([Util::class, 'csvQ'], [
+                                $r['nome'], 'Reposição CCC', '', '', '', Util::fmtD(Util::isoOf($m['n'])), Util::isoWeekLabelN($m['n']), '', '', '',
+                                Util::fmtIn($m['v']), Util::fmtIn($m['saldo']), Util::fmtIn($m['used']), '', '', '',
+                            ]));
+                        }
+                        continue;
+                    }
+                    $e = $r['list'][$q['k']];
                     $it = $e['item'];
                     if ($it['tipo'] !== 'P') {
                         continue;
                     }
                     $origem = isset($e['sug']) ? ($e['sug']['ok'] ? 'sugerido' : 'sugerido (precisa de transferência ou CCC)')
                         : (($it['banco'] ?? '') !== '' ? 'documento' : ((($c['partyBank'][Engine::pkOf($it)] ?? '') === $r['id']) ? 'fornecedor' : ($r['id'] === self::SEM ? 'sem banco' : 'por defeito')));
+                    $docs = isset($e['mem'])
+                        ? implode('|', array_map(static fn ($mm) => $mm['it']['doc'] !== '' ? $mm['it']['doc'] : $mm['it']['tdoc'], $e['mem']))
+                        : ($it['doc'] !== '' ? $it['doc'] : $it['tdoc']);
                     $lines[] = implode(';', array_map([Util::class, 'csvQ'], [
-                        $r['nome'], $origem, $it['doc'] !== '' ? $it['doc'] : $it['tdoc'], $it['parte'], Util::fmtD($it['venc']), Util::isoWeekLabel($it['venc']),
-                        Util::fmtD(Util::isoOf($e['n'])), Util::isoWeekLabelN($e['n']), Util::fmtIn($e['v']), Util::fmtIn($e['saldo']), self::notaOf($it),
+                        $r['nome'], 'Pagamento', $origem, $it['parte'], Util::isoWeekLabelN(isset($e['due']) ? $e['due'] : Util::dayNum($it['venc'])),
+                        Util::fmtD(Util::isoOf($e['n'])), Util::isoWeekLabelN($e['n']), (string) (isset($e['mem']) ? count($e['mem']) : 1), Util::fmtIn($e['v']),
+                        Util::fmtIn((float) ($e['cu'] ?? 0.0)), '', Util::fmtIn($e['saldo']), Util::fmtIn((float) $e['ua']), $docs, Util::fmtD($it['venc']), self::notaOf($it),
                     ]));
                 }
             }
@@ -1598,7 +1691,7 @@ final class TreasuryService
                 if (!$create) {
                     return '';
                 }
-                $nb = ['id' => 'b' . bin2hex(random_bytes(4)), 'nome' => mb_substr($t, 0, 100), 'saldo' => 0.0, 'ccc' => 0.0];
+                $nb = ['id' => 'b' . bin2hex(random_bytes(4)), 'nome' => mb_substr($t, 0, 100), 'saldo' => 0.0, 'ccc' => 0.0, 'minimo' => 5000.0];
                 $banks[] = $nb;
                 return $nb['id'];
             };
@@ -1613,6 +1706,7 @@ final class TreasuryService
                     $nome = $cells[0] ?? '';
                     $sv = Util::parseNum($cells[1] ?? '');
                     $cc = Util::parseNum($cells[2] ?? '') ?? 0.0;
+                    $mp = ($cells[3] ?? '') !== '' ? Util::parseNum($cells[3]) : null;
                     if ($nome === '' || $sv === null) {
                         $errors[] = 'linha ' . ($li + 1);
                         continue;
@@ -1634,8 +1728,12 @@ final class TreasuryService
                     if ($found !== null) {
                         $next[$found]['saldo'] = round($sv, 2);
                         $next[$found]['ccc'] = round($cc, 2);
+                        if ($mp !== null) {
+                            $next[$found]['minimo'] = round(max(0.0, $mp), 2);
+                        }
                     } else {
-                        $next[] = ['id' => $old['id'] ?? 'b' . bin2hex(random_bytes(4)), 'nome' => mb_substr($nome, 0, 100), 'saldo' => round($sv, 2), 'ccc' => round($cc, 2)];
+                        $next[] = ['id' => $old['id'] ?? 'b' . bin2hex(random_bytes(4)), 'nome' => mb_substr($nome, 0, 100), 'saldo' => round($sv, 2), 'ccc' => round($cc, 2),
+                            'minimo' => $mp !== null ? round(max(0.0, $mp), 2) : (float) ($old['minimo'] ?? 5000.0)];
                     }
                     $n++;
                 }

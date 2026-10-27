@@ -234,9 +234,10 @@ final class Storage
     public function defaultState(): array
     {
         return [
-            'version' => 1,
+            'version' => 2,
             'settings' => [
-                'inicio' => '', 'horiz' => '10', 'vista' => 'Semanal', 'useCCC' => false, 'netting' => true,
+                'inicio' => '', 'horiz' => '10', 'vista' => 'Semanal', 'fim' => '', 'agrup' => true, 'diaPag' => '4', 'regraDia' => 'ant',
+                'useCCC' => true, 'repor' => true, 'passo' => '5000', 'netting' => true,
                 'incPend' => true, 'incOut' => true, 'incRec' => true, 'ruleR' => '0', 'ruleP' => '0',
                 'defBankR' => '', 'defBankP' => '', 'modoP' => 'Sugerido', 'crit' => 'Maior folga',
             ],
@@ -266,6 +267,15 @@ final class Storage
             $set['defBankP'] = $set['defBankP'] ?? $set['defBank'];
         }
         unset($set['defBank'], $set['crossNet']);
+        if ((int) ($st['version'] ?? 1) < 2) { // v5: CCC ligada por defeito, saldo mínimo de 5.000 € em cada banco
+            $set['useCCC'] = true;
+            foreach ((array) ($st['banks'] ?? []) as $i => $b) {
+                if (!array_key_exists('minimo', (array) $b)) {
+                    $st['banks'][$i]['minimo'] = 5000.0;
+                }
+            }
+            $st['version'] = 2;
+        }
         $st['settings'] = array_merge($def['settings'], $set);
         $st['classOv'] = (array) ($st['classOv'] ?? []);
         $st['prio'] = array_values((array) ($st['prio'] ?? []));
